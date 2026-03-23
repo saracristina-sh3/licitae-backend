@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Licitaê — Gestão de Licitações Públicas</title>
+  <meta name="description" content="Encontre e acompanhe licitações públicas em todo o Brasil. Busca automática no PNCP, diários oficiais e tribunais de contas. CRM de oportunidades para equipes comerciais.">
+  <meta name="theme-color" content="#1e40af">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Licitaê — Gestão de Licitações Públicas">
+  <meta property="og:description" content="Encontre e acompanhe licitações públicas em todo o Brasil.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://licitae.app">
+  <meta property="og:image" content="https://licitae.app/og-image.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/img/icon.png">
+
+  <style>
+    :root {
+      --brand: #1a56db;
+      --brand-dark: #1e40af;
+      --brand-light: #3b82f6;
+      --accent: #0d9488;
+      --text: #1f2937;
+      --text-light: #6b7280;
+      --bg: #ffffff;
+      --bg-alt: #f9fafb;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Nav ─────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #e5e7eb;
+      z-index: 100;
+      padding: 12px 0;
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--brand-dark);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-logo-img {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: var(--text-light); font-size: 14px; font-weight: 500; }
+    .nav-links a:hover { color: var(--brand); text-decoration: none; }
+
+    /* ── Hero ─────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, var(--brand-dark), var(--brand-light));
+      color: white;
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      margin-bottom: 16px;
+      line-height: 1.2;
+    }
+    .hero p {
+      font-size: 18px;
+      opacity: 0.9;
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+    .hero-badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .hero-badges a {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .hero-badges a:hover { background: rgba(255,255,255,0.25); text-decoration: none; }
+
+    /* ── Features ─────────────────────────────────── */
+    .features { padding: 80px 0; }
+    .features h2 { text-align: center; font-size: 28px; margin-bottom: 48px; }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+    }
+    .feature-card {
+      background: var(--bg-alt);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+    .feature-img {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 { font-size: 18px; margin-bottom: 8px; }
+    .feature-card p { color: var(--text-light); font-size: 14px; }
+
+    /* ── Pricing ──────────────────────────────────── */
+    .pricing { padding: 80px 0; background: var(--bg-alt); }
+    .pricing h2 { text-align: center; font-size: 28px; margin-bottom: 12px; }
+    .pricing .subtitle { text-align: center; color: var(--text-light); margin-bottom: 48px; }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .plan-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 32px;
+      border: 2px solid #e5e7eb;
+    }
+    .plan-card.featured {
+      border-color: var(--brand);
+      position: relative;
+    }
+    .plan-badge {
+      position: absolute;
+      top: -12px;
+      right: 24px;
+      background: var(--brand);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+    .plan-card h3 { font-size: 20px; margin-bottom: 4px; }
+    .plan-price { font-size: 36px; font-weight: 800; margin: 16px 0; }
+    .plan-price span { font-size: 16px; font-weight: 400; color: var(--text-light); }
+    .plan-list { list-style: none; margin: 24px 0; }
+    .plan-list li { padding: 6px 0; font-size: 14px; color: var(--text-light); }
+    .plan-list li::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+
+    /* ── Sources ──────────────────────────────────── */
+    .sources { padding: 60px 0; text-align: center; }
+    .sources h2 { font-size: 28px; margin-bottom: 12px; }
+    .sources .subtitle { color: var(--text-light); margin-bottom: 32px; }
+    .sources-grid {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+    .source-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .source-img { width: 48px; height: 48px; object-fit: contain; margin-bottom: 4px; }
+    .source-item .source-name { font-weight: 600; font-size: 14px; }
+    .source-item .source-desc { font-size: 12px; color: var(--text-light); }
+
+    /* ── Footer ───────────────────────────────────── */
+    footer {
+      background: var(--text);
+      color: #9ca3af;
+      padding: 48px 0 24px;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 48px;
+      margin-bottom: 32px;
+    }
+    footer h4 { color: white; font-size: 14px; margin-bottom: 12px; }
+    footer p, footer a { font-size: 13px; color: #9ca3af; }
+    footer a:hover { color: white; }
+    .footer-links { list-style: none; }
+    .footer-links li { margin-bottom: 8px; }
+    .footer-bottom {
+      border-top: 1px solid #374151;
+      padding-top: 24px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (max-width: 640px) {
+      .footer-grid { grid-template-columns: 1fr; gap: 24px; }
+      .hero { padding: 48px 0 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="nav-logo">
+      <img src="/img/icon.png" alt="Licitaê" class="nav-logo-img">
+      Licitaê
+    </div>
+    <div class="nav-links">
+      <a href="#funcionalidades">Funcionalidades</a>
+      <a href="#planos">Planos</a>
+      <a href="/privacidade.html">Privacidade</a>
+      <a href="/termos.html">Termos</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <h1>Encontre e gerencie licitações<br>públicas em todo o Brasil</h1>
+    <p>Busca automática no PNCP, diários oficiais e tribunais de contas. CRM completo para acompanhar oportunidades do edital à proposta.</p>
+    <div class="hero-badges">
+      <a href="#">Em breve na App Store</a>
+      <a href="#">Em breve no Google Play</a>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features" id="funcionalidades">
+  <div class="container">
+    <h2>Tudo que você precisa para ganhar licitações</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <img src="/img/icon_licitacoes.png" alt="Licitações" class="feature-img">
+        <h3>Busca em 3 fontes oficiais</h3>
+        <p>PNCP, Querido Diário e TCE-RJ. Dados atualizados diariamente com classificação por relevância.</p>
+      </div>
+      <div class="feature-card">
+        <img src="/img/icon_filtros.png" alt="Filtros" class="feature-img">
+        <h3>Filtros avançados</h3>
+        <p>Por estado, modalidade, porte do município, palavras-chave e exclusividade ME/EPP.</p>
+      </div>
+      <div class="feature-card">
+        <img src="/img/icon_crm.png" alt="CRM" class="feature-img">
+        <h3>CRM de Oportunidades</h3>
+        <p>Pipeline visual: Identificada, Analisando, Preparando Proposta, Enviada, Ganha. Histórico completo.</p>
+      </div>
+      <div class="feature-card">
+        <img src="/img/icon_equipe.png" alt="Equipe" class="feature-img">
+        <h3>Trabalho em equipe</h3>
+        <p>Crie sua organização, convide colegas e compartilhe oportunidades com controle de acesso.</p>
+      </div>
+      <div class="feature-card">
+        <img src="/img/icon_alertas.png" alt="Alertas" class="feature-img">
+        <h3>Monitoramento e alertas</h3>
+        <p>Ative notificações por licitação. Saiba na hora quando mudar status, prazo ou valor.</p>
+      </div>
+      <div class="feature-card">
+        <img src="/img/icon_edital.png" alt="Editais" class="feature-img">
+        <h3>Documentos e editais</h3>
+        <p>Acesse editais, anexos e documentos direto do PNCP. Tudo sem sair do app.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Sources -->
+<section class="sources">
+  <div class="container">
+    <h2>Fontes oficiais de dados</h2>
+    <p class="subtitle">Informações públicas atualizadas diariamente</p>
+    <div class="sources-grid">
+      <div class="source-item">
+        <img src="/img/icon_prefeitura.png" alt="PNCP" class="source-img">
+        <div class="source-name">PNCP</div>
+        <div class="source-desc">Portal Nacional de Contratações Públicas</div>
+      </div>
+      <div class="source-item">
+        <img src="/img/icon_edital.png" alt="Querido Diário" class="source-img">
+        <div class="source-name">Querido Diário</div>
+        <div class="source-desc">Diários oficiais municipais</div>
+      </div>
+      <div class="source-item">
+        <img src="/img/icon_licitacoes.png" alt="TCE-RJ" class="source-img">
+        <div class="source-name">TCE-RJ</div>
+        <div class="source-desc">Tribunal de Contas do Estado do RJ</div>
+      </div>
+      <div class="source-item">
+        <img src="/img/icon_configuracoes.png" alt="IBGE" class="source-img">
+        <div class="source-name">IBGE</div>
+        <div class="source-desc">Dados municipais e populacionais</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing" id="planos">
+  <div class="container">
+    <h2>Planos</h2>
+    <p class="subtitle">Comece grátis. Evolua quando precisar.</p>
+    <div class="pricing-grid">
+      <div class="plan-card">
+        <h3>Gratuito</h3>
+        <div class="plan-price">R$0</div>
+        <ul class="plan-list">
+          <li>Busca em PNCP, Querido Diário e TCE-RJ</li>
+          <li>Filtros por relevância, estado e modalidade</li>
+          <li>Detalhes + documentos das licitações</li>
+          <li>Filtro exclusivo ME/EPP</li>
+          <li>Últimos 7 dias de licitações</li>
+        </ul>
+      </div>
+      <div class="plan-card featured">
+        <div class="plan-badge">MAIS POPULAR</div>
+        <h3>Pro</h3>
+        <div class="plan-price">R$49,90<span>/mês</span></div>
+        <ul class="plan-list">
+          <li>Tudo do plano gratuito</li>
+          <li>CRM de Oportunidades com pipeline</li>
+          <li>Personalização de palavras-chave</li>
+          <li>Gestão de equipe</li>
+          <li>Até 90 dias de histórico</li>
+          <li>Alertas por email</li>
+          <li>Exportação Excel</li>
+          <li>Suporte prioritário</li>
+        </ul>
+        <p style="font-size:12px;color:var(--text-light);margin-top:12px;">ou R$479,90/ano (economia de 20%)</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <h4>Licitaê</h4>
+        <p>Gestão de licitações públicas para empresas que vendem para o governo. Busca, filtragem e CRM em um só lugar.</p>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul class="footer-links">
+          <li><a href="/privacidade.html">Política de Privacidade</a></li>
+          <li><a href="/termos.html">Termos de Uso</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contato</h4>
+        <ul class="footer-links">
+          <li><a href="mailto:contato@licitae.app">contato@licitae.app</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2026 Licitaê. Todos os direitos reservados.
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""
+Licitações de Software - Buscador PNCP + Supabase
+Busca licitações de permissão de uso de software em municípios
+de MG e RJ com FPM até 2.8.
+
+Uso:
+    python main.py                  # Busca últimos 7 dias
+    python main.py --dias 30        # Busca últimos 30 dias
+    python main.py --de 20260301 --ate 20260321
+    python main.py --sem-email      # Só gera planilha
+    python main.py --sem-supabase   # Não grava no Supabase
+    python main.py --agendar        # Roda semanalmente
+    python main.py --sync-municipios # Sincroniza municípios no Supabase
+    python main.py --dry-run        # Simula busca sem gravar
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import time
+from datetime import datetime, timedelta
+
+import schedule
+
+from config import Config
+from search import buscar_licitacoes
+from reports import gerar_excel, enviar_email
+
+log = logging.getLogger(__name__)
+
+
+def _setup_logging(verbose: bool = False):
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+def _supabase_disponivel() -> bool:
+    return bool(os.environ.get("SUPABASE_URL")) and bool(os.environ.get("SUPABASE_SERVICE_KEY"))
+
+
+def sync_municipios():
+    """Sincroniza municípios do IBGE no Supabase."""
+    from municipios import carregar_municipios
+    from db import sync_municipios as db_sync
+
+    log.info("Sincronizando municípios no Supabase...")
+    munis = carregar_municipios(Config.UFS, Config.POPULACAO_MAXIMA)
+    count = db_sync(munis)
+    log.info("Municípios sincronizados: %d", count)
+    for uf in Config.UFS:
+        c = len([m for m in munis if m["uf"] == uf])
+        log.info("  %s: %d", uf, c)
+
+
+def executar_busca(
+    dias: int | None = None,
+    data_de: str | None = None,
+    data_ate: str | None = None,
+    sem_email: bool = False,
+    sem_supabase: bool = False,
+    dry_run: bool = False,
+):
+    """Executa uma busca completa, grava no Supabase e gera relatórios."""
+    log.info("=" * 60)
+    log.info("BUSCADOR DE LICITAÇÕES%s", " (DRY RUN)" if dry_run else "")
+    log.info("Execução: %s", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    log.info("=" * 60)
+
+    # Carrega configurações dos usuários
+    from user_configs import carregar_configs_usuarios, unificar_configs
+    configs = carregar_configs_usuarios()
+    busca_config = unificar_configs(configs)
+    log.info("Configs carregadas: %d usuário(s)", len(configs))
+    log.info("  UFs: %s", ", ".join(busca_config["ufs"]))
+    log.info("  Palavras-chave: %d termos", len(busca_config["palavras_chave"]))
+    log.info("  Fontes: %s", ", ".join(busca_config["fontes"]))
+
+    # Datas
+    if data_de and data_ate:
+        dt_inicio = data_de
+        dt_fim = data_ate
+    else:
+        d = dias or Config.DIAS_RETROATIVOS
+        hoje = datetime.now()
+        inicio = hoje - timedelta(days=d)
+        dt_inicio = inicio.strftime("%Y%m%d")
+        dt_fim = hoje.strftime("%Y%m%d")
+
+    resultados = []
+
+    # Busca PNCP
+    if "PNCP" in busca_config["fontes"]:
+        pncp = buscar_licitacoes(
+            dias_retroativos=dias,
+            data_inicial=data_de,
+            data_final=data_ate,
+            busca_config=busca_config,
+        )
+        resultados.extend(pncp)
+        log.info("PNCP: %d resultados", len(pncp))
+    else:
+        log.info("PNCP: desativado")
+
+    # Busca Querido Diário
+    if "QUERIDO_DIARIO" in busca_config["fontes"]:
+        try:
+            from scrapers.querido_diario import buscar_querido_diario
+            log.info("Buscando no Querido Diário...")
+            qd = buscar_querido_diario(dt_inicio, dt_fim)
+            resultados.extend(qd)
+            log.info("Querido Diário: %d resultados", len(qd))
+        except Exception as e:
+            log.error("Querido Diário: erro - %s", e)
+    else:
+        log.info("Querido Diário: desativado")
+
+    # Busca TCE-RJ
+    if "TCE_RJ" in busca_config["fontes"] and "RJ" in busca_config["ufs"]:
+        try:
+            from scrapers.tcerj import buscar_tcerj
+            log.info("Buscando no TCE-RJ...")
+            tcerj = buscar_tcerj(dt_inicio, dt_fim)
+            resultados.extend(tcerj)
+            log.info("TCE-RJ: %d resultados", len(tcerj))
+        except Exception as e:
+            log.error("TCE-RJ: erro - %s", e)
+    else:
+        log.info("TCE-RJ: desativado")
+
+    log.info("=" * 60)
+    log.info("Total encontrado: %d (todas as fontes)", len(resultados))
+
+    if resultados:
+        alta = len([r for r in resultados if r["relevancia"] == "ALTA"])
+        media = len([r for r in resultados if r["relevancia"] == "MEDIA"])
+        baixa = len([r for r in resultados if r["relevancia"] == "BAIXA"])
+        valor = sum(r["valor_estimado"] for r in resultados)
+        log.info("  ALTA: %d | MÉDIA: %d | BAIXA: %d", alta, media, baixa)
+        log.info("  Valor total estimado: R$ %s", f"{valor:,.2f}")
+
+    if dry_run:
+        log.info("DRY RUN — não gravou no Supabase, não enviou email, não gerou Excel")
+        return resultados
+
+    # Grava no Supabase
+    usar_supabase = not sem_supabase and _supabase_disponivel()
+    if usar_supabase and resultados:
+        from db import inserir_licitacoes
+
+        log.info("Gravando no Supabase...")
+        stats = inserir_licitacoes(resultados)
+        log.info("  Inseridas: %d | Duplicadas: %d | Erros: %d",
+                 stats["inseridas"], stats["duplicadas"], stats["erros"])
+    elif not usar_supabase:
+        log.info("Supabase não configurado, pulando gravação")
+
+    # Gera Excel
+    arquivo = gerar_excel(resultados)
+
+    # Envia email
+    if not sem_email:
+        enviar_email(resultados, arquivo)
+    else:
+        log.info("Envio de email desabilitado (--sem-email)")
+
+    log.info("=" * 60)
+    log.info("Concluído!")
+    return resultados
+
+
+def executar_monitoramento():
+    """Verifica mudanças nas licitações monitoradas pelos usuários."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando monitoramento")
+        return
+    from monitor import verificar_mudancas
+    verificar_mudancas()
+
+
+def agendar():
+    """Agenda busca diária às 12h e monitoramento a cada 4h."""
+    log.info("Agendador iniciado.")
+    log.info("  Busca de licitações: diária às 12:00")
+    log.info("  Monitoramento de mudanças: a cada 4 horas")
+    log.info("Pressione Ctrl+C para parar.")
+
+    schedule.every().day.at("12:00").do(executar_busca)
+    schedule.every(4).hours.do(executar_monitoramento)
+
+    # Executa imediatamente na primeira vez
+    executar_busca()
+    executar_monitoramento()
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Busca licitações de software no PNCP para municípios de MG e RJ com FPM até 2.8"
+    )
+    parser.add_argument("--dias", type=int, help="Dias retroativos para buscar (padrão: 7)")
+    parser.add_argument("--de", dest="data_de", help="Data inicial (YYYYMMDD)")
+    parser.add_argument("--ate", dest="data_ate", help="Data final (YYYYMMDD)")
+    parser.add_argument("--sem-email", action="store_true", help="Não enviar email, só gerar planilha")
+    parser.add_argument("--sem-supabase", action="store_true", help="Não gravar no Supabase")
+    parser.add_argument("--agendar", action="store_true", help="Rodar semanalmente (segunda 8h)")
+    parser.add_argument("--sync-municipios", action="store_true", help="Sincroniza municípios no Supabase")
+    parser.add_argument("--dry-run", action="store_true", help="Simula busca sem gravar nem enviar")
+    parser.add_argument("--monitorar", action="store_true", help="Verifica mudanças em licitações monitoradas")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Logs detalhados (DEBUG)")
+    parser.add_argument(
+        "--carregar-municipios",
+        action="store_true",
+        help="Apenas carrega/atualiza cache local de municípios",
+    )
+
+    args = parser.parse_args()
+    _setup_logging(args.verbose)
+
+    if args.sync_municipios:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        sync_municipios()
+        return
+
+    if args.carregar_municipios:
+        from municipios import carregar_municipios
+
+        munis = carregar_municipios(Config.UFS, Config.POPULACAO_MAXIMA)
+        log.info("Municípios carregados: %d", len(munis))
+        for uf in Config.UFS:
+            count = len([m for m in munis if m["uf"] == uf])
+            log.info("  %s: %d", uf, count)
+        return
+
+    if args.monitorar:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        executar_monitoramento()
+        return
+
+    if args.agendar:
+        agendar()
+        return
+
+    executar_busca(
+        dias=args.dias,
+        data_de=args.data_de,
+        data_ate=args.data_ate,
+        sem_email=args.sem_email,
+        sem_supabase=args.sem_supabase,
+        dry_run=args.dry_run,
+    )
+
+
+if __name__ == "__main__":
+    main()

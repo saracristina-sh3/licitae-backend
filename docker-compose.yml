@@ -1,0 +1,28 @@
+services:
+  # Busca manual (uma vez)
+  licitacoes:
+    build: .
+    container_name: licitacoes-software
+    env_file:
+      - .env
+    volumes:
+      - ./relatorios:/app/relatorios
+      - cache_municipios:/app/cache
+    command: ["--sem-email"]
+
+  # Busca automática diária às 12h
+  licitacoes-cron:
+    build: .
+    container_name: licitacoes-cron
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Sao_Paulo
+    volumes:
+      - ./relatorios:/app/relatorios
+      - cache_municipios:/app/cache
+    command: ["--agendar"]
+    restart: unless-stopped
+
+volumes:
+  cache_municipios:

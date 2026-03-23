@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+
+  <!-- Stylized "L" + checkmark — represents Licitaê -->
+  <!-- The "L" shape (document/list metaphor) -->
+  <path
+    d="M 320 200 L 320 680 L 600 680"
+    stroke="white"
+    stroke-width="80"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+    opacity="0.95"
+  />
+
+  <!-- Horizontal list lines coming off the L -->
+  <line x1="420" y1="360" x2="680" y2="360" stroke="white" stroke-width="40" stroke-linecap="round" opacity="0.4"/>
+  <line x1="420" y1="480" x2="620" y2="480" stroke="white" stroke-width="40" stroke-linecap="round" opacity="0.3"/>
+
+  <!-- Checkmark circle (bottom right — "ê" / approval) -->
+  <circle cx="700" cy="700" r="130" fill="#0d9488"/>
+  <path
+    d="M 645 700 L 685 740 L 755 660"
+    stroke="white"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>
