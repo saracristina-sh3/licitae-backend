@@ -180,8 +180,11 @@ def executar_monitoramento():
     if not _supabase_disponivel():
         log.info("Supabase não configurado, pulando monitoramento")
         return
-    from monitor import verificar_mudancas
-    verificar_mudancas()
+    try:
+        from monitor import verificar_mudancas
+        verificar_mudancas()
+    except Exception as e:
+        log.error("Erro no monitoramento: %s", e)
 
 
 def executar_verificacao_prazos():
@@ -189,8 +192,11 @@ def executar_verificacao_prazos():
     if not _supabase_disponivel():
         log.info("Supabase não configurado, pulando verificação de prazos")
         return
-    from deadline_alerts import verificar_prazos
-    verificar_prazos()
+    try:
+        from deadline_alerts import verificar_prazos
+        verificar_prazos()
+    except Exception as e:
+        log.error("Erro na verificação de prazos: %s", e)
 
 
 def executar_analise_editais(limite: int = 10):
@@ -198,8 +204,11 @@ def executar_analise_editais(limite: int = 10):
     if not _supabase_disponivel():
         log.info("Supabase não configurado, pulando análise de editais")
         return
-    from edital_analyzer import analisar_licitacoes_pendentes
-    analisar_licitacoes_pendentes(limite)
+    try:
+        from edital_analyzer import analisar_licitacoes_pendentes
+        analisar_licitacoes_pendentes(limite)
+    except Exception as e:
+        log.error("Erro na análise de editais: %s", e)
 
 
 def executar_envio_convites():
@@ -207,8 +216,11 @@ def executar_envio_convites():
     if not _supabase_disponivel():
         log.info("Supabase não configurado, pulando envio de convites")
         return
-    from invite_email import enviar_convites_pendentes
-    enviar_convites_pendentes()
+    try:
+        from invite_email import enviar_convites_pendentes
+        enviar_convites_pendentes()
+    except Exception as e:
+        log.error("Erro no envio de convites: %s", e)
 
 
 def agendar():

@@ -168,13 +168,15 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
     client = get_client()
 
     # Verifica se já foi analisado
-    existing = client.table("analise_editais").select("id").eq(
-        "licitacao_id", licitacao_id
-    ).maybe_single().execute()
-
-    if existing.data:
-        log.debug("Licitação %s já analisada, pulando", licitacao_id)
-        return existing.data
+    try:
+        existing = client.table("analise_editais").select("id").eq(
+            "licitacao_id", licitacao_id
+        ).maybe_single().execute()
+        if existing and existing.data:
+            log.debug("Licitação %s já analisada, pulando", licitacao_id)
+            return existing.data
+    except Exception:
+        pass  # Tabela pode não existir ainda
 
     # Busca lista de documentos no PNCP
     try:
