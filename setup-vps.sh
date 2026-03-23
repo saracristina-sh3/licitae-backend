@@ -48,7 +48,7 @@ server {
     server_name licitae.app www.licitae.app;
 
     # Site estático
-    root /home/deploy/site;
+    root /home/deploy/licitae-backend/site;
     index index.html;
 
     location / {
@@ -79,7 +79,7 @@ echo "============================================"
 echo ""
 echo "Próximos passos:"
 echo "  1. Apontar DNS de licitae.app para este IP"
-echo "  2. Copiar o site:  scp -r site/* root@85.31.61.162:/home/deploy/site/"
-echo "  3. Copiar o backend e subir Docker"
+echo "  2. Clonar o repo:  git clone https://github.com/saracristina-sh3/licitae-backend.git /home/deploy/licitae-backend"
+echo "  3. Criar .env e subir Docker"
 echo "  4. Gerar SSL:  certbot --nginx -d licitae.app -d www.licitae.app"
 echo ""

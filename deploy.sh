@@ -1,12 +1,12 @@
 #!/bin/bash
 # ============================================================
-# Deploy — Licitações Software
-# Uso: ./deploy.sh [primeiro|atualizar]
+# Deploy — Licitaê Backend
+# Uso: ./deploy.sh [primeiro|atualizar|logs|status|parar|buscar]
 # ============================================================
 
 set -euo pipefail
 
-APP_DIR="/home/deploy/licitacoes-software"
+APP_DIR="/home/deploy/licitae-backend"
 COMPOSE_FILE="docker-compose.prod.yml"
 
 case "${1:-atualizar}" in
@@ -15,7 +15,7 @@ case "${1:-atualizar}" in
 
     # Clonar repo (troque pela URL do seu repo)
     if [ ! -d "$APP_DIR" ]; then
-      git clone https://github.com/SEU_USUARIO/licitacoes-software.git "$APP_DIR"
+      git clone https://github.com/saracristina-sh3/licitae-backend.git "$APP_DIR"
     fi
 
     cd "$APP_DIR"

@@ -22,18 +22,6 @@ services:
         limits:
           memory: 512M
 
-  # Auto-update: monitora Docker Hub e recria container com nova imagem
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - TZ=America/Sao_Paulo
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=86400  # checa 1x por dia
-      - WATCHTOWER_MONITOR_ONLY=false
-    restart: unless-stopped
 
 volumes:
   relatorios:
