@@ -202,6 +202,15 @@ def executar_analise_editais(limite: int = 10):
     analisar_licitacoes_pendentes(limite)
 
 
+def executar_envio_convites():
+    """Envia emails de convite pendentes."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando envio de convites")
+        return
+    from invite_email import enviar_convites_pendentes
+    enviar_convites_pendentes()
+
+
 def agendar():
     """Agenda busca diária às 12h e monitoramento a cada 4h."""
     log.info("Agendador iniciado.")
@@ -215,12 +224,14 @@ def agendar():
     schedule.every(4).hours.do(executar_monitoramento)
     schedule.every().day.at("08:00").do(executar_verificacao_prazos)
     schedule.every().day.at("13:00").do(executar_analise_editais)
+    schedule.every(30).minutes.do(executar_envio_convites)
 
     # Executa imediatamente na primeira vez
     executar_busca()
     executar_monitoramento()
     executar_verificacao_prazos()
     executar_analise_editais()
+    executar_envio_convites()
 
     while True:
         schedule.run_pending()
