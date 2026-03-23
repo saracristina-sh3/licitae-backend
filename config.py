@@ -29,14 +29,14 @@ class Config:
         p.strip()
         for p in os.getenv(
             "PALAVRAS_CHAVE",
-            "software,sistema,permissão de uso,licença de uso,solução tecnológica,gestão pública,sistema de gestão,locação de software,cessão de uso,sistema integrado",
+            "software,sistema,permissão de uso,licença de uso,solução tecnológica,gestão pública,sistema de gestão,locação de software,cessão de uso,sistema integrado,email,e-mail,e-mails institucionais,hospedagem de e-mails",
         ).split(",")
         if p.strip()
     ]
 
     DIAS_RETROATIVOS = int(os.getenv("DIAS_RETROATIVOS", "7"))
 
-    UFS = [u.strip() for u in os.getenv("UFS", "MG,RJ").split(",")]
+    UFS = [u.strip() for u in os.getenv("UFS", "MG,RJ,SP,ES,PR,SC,RS,GO,BA,PE,CE").split(",")]
 
     POPULACAO_MAXIMA = int(os.getenv("POPULACAO_MAXIMA", "91692"))
 

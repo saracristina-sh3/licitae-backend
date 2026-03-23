@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.queridodiario.ok.org.br"
 
-# Termos de busca para licitações de software
+# Termos de busca para licitações de software e email
 QUERIES = [
     '"licença de uso" software',
     '"permissão de uso" software',
@@ -25,6 +25,9 @@ QUERIES = [
     '"sistema de gestão" licitação',
     '"sistema integrado" prefeitura software',
     '"cessão de uso" software',
+    '"hospedagem de e-mails"',
+    '"e-mails institucionais"',
+    '"hospedagem de email"',
 ]
 
 
@@ -85,7 +88,7 @@ def buscar_querido_diario(
     Busca licitações de software nos diários oficiais via Querido Diário.
     Retorna no mesmo formato que search.py.
     """
-    UF_STATE_CODES = {"MG": "MG", "RJ": "RJ"}
+    # Querido Diário usa a sigla da UF diretamente como state_code
 
     # Municípios-alvo para filtrar resultados
     municipios = carregar_municipios(Config.UFS, Config.POPULACAO_MAXIMA)
@@ -96,7 +99,7 @@ def buscar_querido_diario(
     vistos = set()  # dedup por territory_id + date + trecho
 
     for uf in Config.UFS:
-        state_code = UF_STATE_CODES.get(uf, uf)
+        state_code = uf
 
         for query in QUERIES:
             log.info("  QD %s - '%s...'", uf, query[:30])

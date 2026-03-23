@@ -53,10 +53,12 @@ def match_palavras_chave(texto: str, palavras_chave: list[str]) -> list[str]:
 TERMOS_ALTA = [
     "permissão de uso", "licença de uso", "cessão de uso",
     "locação de software", "sistema integrado de gestão",
+    "hospedagem de e-mails", "e-mails institucionais",
 ]
 
 TERMOS_MEDIA = [
     "software", "sistema de gestão", "solução tecnológica",
+    "email", "e-mail",
 ]
 
 TERMOS_ME_EPP = [

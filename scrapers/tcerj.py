@@ -21,6 +21,8 @@ PALAVRAS_CHAVE_SOFTWARE = [
     "sistema integrado", "sistema de gestão", "sistema de gestao",
     "solução tecnológica", "solucao tecnologica",
     "informática", "informatica", "tecnologia da informação",
+    "email", "e-mail", "e-mails institucionais", "hospedagem de e-mails",
+    "hospedagem de email",
 ]
 
 
