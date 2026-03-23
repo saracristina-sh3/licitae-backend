@@ -184,19 +184,43 @@ def executar_monitoramento():
     verificar_mudancas()
 
 
+def executar_verificacao_prazos():
+    """Verifica oportunidades com prazos próximos e envia alertas."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando verificação de prazos")
+        return
+    from deadline_alerts import verificar_prazos
+    verificar_prazos()
+
+
+def executar_analise_editais(limite: int = 10):
+    """Analisa editais de licitações abertas que ainda não foram processados."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando análise de editais")
+        return
+    from edital_analyzer import analisar_licitacoes_pendentes
+    analisar_licitacoes_pendentes(limite)
+
+
 def agendar():
     """Agenda busca diária às 12h e monitoramento a cada 4h."""
     log.info("Agendador iniciado.")
     log.info("  Busca de licitações: diária às 12:00")
     log.info("  Monitoramento de mudanças: a cada 4 horas")
+    log.info("  Verificação de prazos: diária às 08:00")
+    log.info("  Análise de editais: diária às 13:00")
     log.info("Pressione Ctrl+C para parar.")
 
     schedule.every().day.at("12:00").do(executar_busca)
     schedule.every(4).hours.do(executar_monitoramento)
+    schedule.every().day.at("08:00").do(executar_verificacao_prazos)
+    schedule.every().day.at("13:00").do(executar_analise_editais)
 
     # Executa imediatamente na primeira vez
     executar_busca()
     executar_monitoramento()
+    executar_verificacao_prazos()
+    executar_analise_editais()
 
     while True:
         schedule.run_pending()
@@ -216,6 +240,9 @@ def main():
     parser.add_argument("--sync-municipios", action="store_true", help="Sincroniza municípios no Supabase")
     parser.add_argument("--dry-run", action="store_true", help="Simula busca sem gravar nem enviar")
     parser.add_argument("--monitorar", action="store_true", help="Verifica mudanças em licitações monitoradas")
+    parser.add_argument("--verificar-prazos", action="store_true", help="Verifica prazos próximos e envia alertas")
+    parser.add_argument("--analisar-editais", action="store_true", help="Analisa editais de licitações abertas")
+    parser.add_argument("--limite-editais", type=int, default=10, help="Quantidade de editais para analisar (padrão: 10)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Logs detalhados (DEBUG)")
     parser.add_argument(
         "--carregar-municipios",
@@ -248,6 +275,20 @@ def main():
             log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
             return
         executar_monitoramento()
+        return
+
+    if args.verificar_prazos:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        executar_verificacao_prazos()
+        return
+
+    if args.analisar_editais:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        executar_analise_editais(args.limite_editais)
         return
 
     if args.agendar:
