@@ -47,7 +47,7 @@ server {
     listen 80;
     server_name licitae.app www.licitae.app;
 
-    # Site estático
+    # Site estático (landing page)
     root /home/deploy/licitae-backend/site;
     index index.html;
 
@@ -55,8 +55,21 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Web app (SPA)
+    location /app/ {
+        alias /home/deploy/licitae-app/dist/;
+        try_files $uri $uri/ /app/index.html;
+    }
+
     # Cache de imagens
     location /img/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Cache de assets do app
+    location /app/assets/ {
+        alias /home/deploy/licitae-app/dist/assets/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
