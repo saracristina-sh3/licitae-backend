@@ -170,7 +170,7 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
     # Verifica se já foi analisado
     existing = client.table("analise_editais").select("id").eq(
         "licitacao_id", licitacao_id
-    ).maybeSingle().execute()
+    ).maybe_single().execute()
 
     if existing.data:
         log.debug("Licitação %s já analisada, pulando", licitacao_id)
