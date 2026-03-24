@@ -48,3 +48,14 @@ class Config:
         9,   # Inexigibilidade
         12,  # Credenciamento
     ]
+
+    # PNCP API (compras — itens e resultados)
+    PNCP_COMPRAS_URL = "https://pncp.gov.br/api/pncp"
+
+    # Plataformas-alvo para coleta de itens (idUsuario PNCP)
+    PLATAFORMAS_ALVO = [
+        int(x) for x in os.getenv(
+            "PLATAFORMAS_ALVO",
+            "121,12,13,18,82,84,55,100,3",
+        ).split(",") if x.strip()
+    ]

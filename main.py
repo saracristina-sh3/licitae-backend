@@ -211,6 +211,45 @@ def executar_analise_editais(limite: int = 10):
         log.error("Erro na análise de editais: %s", e)
 
 
+def executar_coleta_itens(limite: int = 100):
+    """Coleta itens e resultados de licitações pendentes."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando coleta de itens")
+        return
+    try:
+        from item_collector import coletar_pendentes
+        stats = coletar_pendentes(limite=limite)
+        log.info("Coleta de itens: %s", stats)
+    except Exception as e:
+        log.error("Erro na coleta de itens: %s", e)
+
+
+def executar_coleta_resultados(limite: int = 200):
+    """Coleta resultados pendentes de itens já coletados."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando coleta de resultados")
+        return
+    try:
+        from item_collector import coletar_resultados_pendentes
+        stats = coletar_resultados_pendentes(limite=limite)
+        log.info("Coleta de resultados: %s", stats)
+    except Exception as e:
+        log.error("Erro na coleta de resultados: %s", e)
+
+
+def executar_coleta_plataforma(id_usuario: int, dias: int = 30, uf: str | None = None):
+    """Coleta contratações + itens de uma plataforma específica."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado")
+        return
+    try:
+        from item_collector import coletar_por_plataforma
+        stats = coletar_por_plataforma(id_usuario=id_usuario, dias=dias, uf=uf)
+        log.info("Coleta plataforma %d: %s", id_usuario, stats)
+    except Exception as e:
+        log.error("Erro na coleta por plataforma: %s", e)
+
+
 def executar_envio_convites():
     """Envia emails de convite pendentes."""
     if not _supabase_disponivel():
@@ -237,6 +276,8 @@ def agendar():
     schedule.every().day.at("08:00").do(executar_verificacao_prazos)
     schedule.every().day.at("13:00").do(executar_analise_editais)
     schedule.every(30).minutes.do(executar_envio_convites)
+    schedule.every().day.at("14:00").do(executar_coleta_itens)
+    schedule.every().day.at("15:00").do(executar_coleta_resultados)
 
     # Executa imediatamente na primeira vez
     executar_busca()
@@ -244,6 +285,8 @@ def agendar():
     executar_verificacao_prazos()
     executar_analise_editais()
     executar_envio_convites()
+    executar_coleta_itens()
+    executar_coleta_resultados()
 
     while True:
         schedule.run_pending()
@@ -272,6 +315,13 @@ def main():
         action="store_true",
         help="Apenas carrega/atualiza cache local de municípios",
     )
+    parser.add_argument("--sync-plataformas", action="store_true", help="Popula tabela de plataformas PNCP")
+    parser.add_argument("--coletar-itens", action="store_true", help="Coleta itens de licitações pendentes")
+    parser.add_argument("--coletar-resultados", action="store_true", help="Coleta resultados pendentes")
+    parser.add_argument("--coletar-plataforma", type=int, metavar="ID", help="Coleta itens de uma plataforma (idUsuario)")
+    parser.add_argument("--limite-itens", type=int, default=100, help="Limite de licitações para coleta (padrão: 100)")
+    parser.add_argument("--uf-coleta", help="Filtrar coleta por UF (ex: MG)")
+    parser.add_argument("--dias-coleta", type=int, default=30, help="Dias retroativos para coleta (padrão: 30)")
 
     args = parser.parse_args()
     _setup_logging(args.verbose)
@@ -312,6 +362,31 @@ def main():
             log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
             return
         executar_analise_editais(args.limite_editais)
+        return
+
+    if args.sync_plataformas:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        from platform_mapper import popular_plataformas_conhecidas
+        count = popular_plataformas_conhecidas()
+        log.info("Plataformas sincronizadas: %d", count)
+        return
+
+    if args.coletar_itens:
+        executar_coleta_itens(args.limite_itens)
+        return
+
+    if args.coletar_resultados:
+        executar_coleta_resultados(args.limite_itens)
+        return
+
+    if args.coletar_plataforma:
+        executar_coleta_plataforma(
+            id_usuario=args.coletar_plataforma,
+            dias=args.dias_coleta,
+            uf=args.uf_coleta,
+        )
         return
 
     if args.agendar:

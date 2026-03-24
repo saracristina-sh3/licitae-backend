@@ -106,6 +106,43 @@ class PNCPClient:
 
         return todos
 
+    def buscar_contratacoes_por_plataforma(
+        self,
+        id_usuario: int,
+        data_inicial: str,
+        data_final: str,
+        modalidade: int,
+        uf: str | None = None,
+        pagina: int = 1,
+        tamanho: int = 50,
+    ) -> dict:
+        """Busca contratações filtradas por plataforma (idUsuario PNCP)."""
+        params = {
+            "dataInicial": data_inicial,
+            "dataFinal": data_final,
+            "codigoModalidadeContratacao": modalidade,
+            "idUsuario": id_usuario,
+            "pagina": pagina,
+            "tamanhoPagina": min(tamanho, 50),
+        }
+        if uf:
+            params["uf"] = uf
+
+        url = f"{self.base_url}/v1/contratacoes/publicacao"
+
+        try:
+            resp = self.session.get(url, params=params, timeout=20)
+            if resp.status_code == 204:
+                return {"data": [], "totalRegistros": 0, "totalPaginas": 0}
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 422:
+                return {"data": [], "totalRegistros": 0, "totalPaginas": 0}
+            raise
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            return {"data": [], "totalRegistros": 0, "totalPaginas": 0}
+
     def buscar_contratacao_detalhes(self, cnpj: str, ano: int, sequencial: int) -> dict | None:
         """Busca detalhes de uma contratação específica."""
         url = f"{self.base_url}/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}"
@@ -117,3 +154,42 @@ class PNCPClient:
             return resp.json()
         except requests.exceptions.HTTPError:
             return None
+
+    def buscar_itens(self, cnpj: str, ano: int, sequencial: int) -> list[dict]:
+        """Busca itens de uma contratação específica (API de compras)."""
+        url = f"{Config.PNCP_COMPRAS_URL}/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens"
+        try:
+            resp = self.session.get(url, timeout=30)
+            if resp.status_code == 204:
+                return []
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, list) else data.get("data", [])
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (404, 422):
+                return []
+            raise
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            return []
+
+    def buscar_resultados_item(
+        self, cnpj: str, ano: int, sequencial: int, numero_item: int
+    ) -> list[dict]:
+        """Busca resultados (preço homologado) de um item específico."""
+        url = (
+            f"{Config.PNCP_COMPRAS_URL}/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}"
+            f"/itens/{numero_item}/resultados"
+        )
+        try:
+            resp = self.session.get(url, timeout=30)
+            if resp.status_code == 204:
+                return []
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, list) else data.get("data", [])
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (404, 422):
+                return []
+            raise
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            return []

@@ -12,6 +12,8 @@ import re
 import requests
 from pdfminer.high_level import extract_text
 
+from config import Config
+
 log = logging.getLogger(__name__)
 
 # ── Padrões de extração ──────────────────────────────────────
@@ -181,7 +183,7 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
     # Busca lista de documentos no PNCP
     try:
         resp = requests.get(
-            f"https://pncp.gov.br/api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos",
+            f"{Config.PNCP_BASE_URL}/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos",
             timeout=20,
             headers={"User-Agent": "LicitacoesSoftware/1.0"},
         )
