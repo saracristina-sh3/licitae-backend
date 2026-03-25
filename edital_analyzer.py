@@ -83,10 +83,12 @@ def baixar_pdf(url: str) -> bytes | None:
             "User-Agent": "LicitacoesSoftware/1.0",
         })
         resp.raise_for_status()
-        if "pdf" not in resp.headers.get("content-type", "").lower() and not url.endswith(".pdf"):
-            log.debug("URL não é PDF: %s", url)
+        content = resp.content
+        # Verifica magic bytes do PDF (%PDF) em vez de confiar no content-type ou extensão
+        if content[:4] != b"%PDF":
+            log.debug("Arquivo não é PDF (magic bytes): %s", url)
             return None
-        return resp.content
+        return content
     except Exception as e:
         log.warning("Erro ao baixar PDF %s: %s", url, e)
         return None
