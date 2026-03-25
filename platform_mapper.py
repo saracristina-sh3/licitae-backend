@@ -15,7 +15,7 @@ CONCORRENTES_DIRETAS = [
     {"id_usuario": 12, "nome": "BLL Compras (Bolsa Nacional De Compras - BNC)", "tipo": "concorrente_direta"},
     {"id_usuario": 13, "nome": "Licitar Digital", "tipo": "concorrente_direta"},
     {"id_usuario": 18, "nome": "Licitanet Licitações Eletrônicas LTDA", "tipo": "concorrente_direta"},
-    # LLM — a localizar idUsuario
+    {"id_usuario": 3, "nome": "Compras.gov.br", "tipo": "plataforma_licitacao"},
     # AMM — a localizar idUsuario
 ]
 
@@ -24,7 +24,6 @@ IDS_CONCORRENTES = {p["id_usuario"] for p in CONCORRENTES_DIRETAS}
 
 # Demais plataformas mapeadas (referência, não concorrentes diretas)
 DEMAIS_PLATAFORMAS = [
-    {"id_usuario": 3, "nome": "Compras.gov.br", "tipo": "plataforma_licitacao"},
     {"id_usuario": 5, "nome": "ECustomize Consultoria em Software S.A", "tipo": "plataforma_licitacao"},
     {"id_usuario": 10, "nome": "Portal de Compras do Estado de Minas Gerais", "tipo": "portal_estadual"},
     {"id_usuario": 14, "nome": "Portal de Compras Públicas do Estado do Rio de Janeiro", "tipo": "portal_estadual"},
