@@ -145,7 +145,7 @@ class PNCPClient:
 
     def buscar_contratacao_detalhes(self, cnpj: str, ano: int, sequencial: int) -> dict | None:
         """Busca detalhes de uma contratação específica."""
-        url = f"{self.base_url}/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}"
+        url = f"{Config.PNCP_COMPRAS_URL}/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}"
         try:
             resp = self.session.get(url, timeout=60)
             if resp.status_code == 204:

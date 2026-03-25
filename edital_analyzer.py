@@ -183,7 +183,7 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
     # Busca lista de documentos no PNCP
     try:
         resp = requests.get(
-            f"{Config.PNCP_BASE_URL}/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos",
+            f"{Config.PNCP_COMPRAS_URL}/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos",
             timeout=20,
             headers={"User-Agent": "LicitacoesSoftware/1.0"},
         )

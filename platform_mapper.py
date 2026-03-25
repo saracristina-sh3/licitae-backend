@@ -9,16 +9,26 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# Plataformas conhecidas (seed)
-PLATAFORMAS_CONHECIDAS = [
+# SH3 e concorrentes diretas
+CONCORRENTES_DIRETAS = [
+    {"id_usuario": 121, "nome": "SH3 Informática Ltda.", "tipo": "concorrente_direta"},
+    {"id_usuario": 12, "nome": "BLL Compras (Bolsa Nacional De Compras - BNC)", "tipo": "concorrente_direta"},
+    {"id_usuario": 13, "nome": "Licitar Digital", "tipo": "concorrente_direta"},
+    {"id_usuario": 18, "nome": "Licitanet Licitações Eletrônicas LTDA", "tipo": "concorrente_direta"},
+    # LLM — a localizar idUsuario
+    # AMM — a localizar idUsuario
+]
+
+# IDs das concorrentes diretas (para filtros rápidos)
+IDS_CONCORRENTES = {p["id_usuario"] for p in CONCORRENTES_DIRETAS}
+
+# Demais plataformas mapeadas (referência, não concorrentes diretas)
+DEMAIS_PLATAFORMAS = [
     {"id_usuario": 3, "nome": "Compras.gov.br", "tipo": "plataforma_licitacao"},
     {"id_usuario": 5, "nome": "ECustomize Consultoria em Software S.A", "tipo": "plataforma_licitacao"},
     {"id_usuario": 10, "nome": "Portal de Compras do Estado de Minas Gerais", "tipo": "portal_estadual"},
-    {"id_usuario": 12, "nome": "Bolsa Nacional De Compras - BNC", "tipo": "plataforma_licitacao"},
-    {"id_usuario": 13, "nome": "Licitar Digital", "tipo": "plataforma_licitacao"},
     {"id_usuario": 14, "nome": "Portal de Compras Públicas do Estado do Rio de Janeiro", "tipo": "portal_estadual"},
     {"id_usuario": 16, "nome": "Compras Pará", "tipo": "portal_estadual"},
-    {"id_usuario": 18, "nome": "Licitanet Licitações Eletrônicas LTDA", "tipo": "plataforma_licitacao"},
     {"id_usuario": 26, "nome": "Memory Projetos e Desenvolvimento de Sistemas LTDA", "tipo": "sistema_gestao"},
     {"id_usuario": 27, "nome": "HLH Assessoria e Consultoria Ltda", "tipo": "sistema_gestao"},
     {"id_usuario": 30, "nome": "Ascontech Solutions", "tipo": "sistema_gestao"},
@@ -48,7 +58,6 @@ PLATAFORMAS_CONHECIDAS = [
     {"id_usuario": 102, "nome": "SMARAPD Informática LTDA", "tipo": "sistema_gestao"},
     {"id_usuario": 109, "nome": "STS Informática Ltda", "tipo": "sistema_gestao"},
     {"id_usuario": 120, "nome": "Lemarq Software", "tipo": "sistema_gestao"},
-    {"id_usuario": 121, "nome": "SH3 Informática Ltda.", "tipo": "sistema_gestao"},
     {"id_usuario": 131, "nome": "PROCERGS", "tipo": "portal_estadual"},
     {"id_usuario": 133, "nome": "CONAM Consultoria em Administração Municipal", "tipo": "sistema_gestao"},
     {"id_usuario": 135, "nome": "Pública Tecnologia Ltda.", "tipo": "sistema_gestao"},
@@ -57,6 +66,9 @@ PLATAFORMAS_CONHECIDAS = [
     {"id_usuario": 144, "nome": "JL Alves Gestão", "tipo": "sistema_gestao"},
     {"id_usuario": 145, "nome": "EMPRO Tecnologia e Informação", "tipo": "sistema_gestao"},
 ]
+
+# Todas juntas para seed do banco
+PLATAFORMAS_CONHECIDAS = CONCORRENTES_DIRETAS + DEMAIS_PLATAFORMAS
 
 
 def popular_plataformas_conhecidas() -> int:
