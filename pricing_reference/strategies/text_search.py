@@ -32,10 +32,10 @@ log = logging.getLogger(__name__)
 
 
 def _extrair_termos(texto: str) -> list[str]:
-    """Extrai termos significativos de um texto (sem stopwords, >3 chars)."""
+    """Extrai termos significativos de um texto (sem stopwords, >3 chars, só alfabéticos)."""
     return [
         p for p in normalizar(texto).split()
-        if len(p) > 3 and p not in STOPWORDS
+        if len(p) > 3 and p.isalpha() and p not in STOPWORDS
     ]
 
 

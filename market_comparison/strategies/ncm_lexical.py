@@ -12,10 +12,10 @@ from market_comparison.types import ObservedItem
 
 
 def _extrair_palavras_chave(descricao: str) -> list[str]:
-    """Extrai palavras significativas (sem stopwords, >3 chars)."""
+    """Extrai palavras significativas (sem stopwords, >3 chars, só alfabéticos)."""
     return [
         p for p in normalizar(descricao).split()
-        if len(p) > 3 and p not in STOPWORDS
+        if len(p) > 3 and p.isalpha() and p not in STOPWORDS
     ]
 
 
