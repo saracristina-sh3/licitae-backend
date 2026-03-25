@@ -321,15 +321,20 @@ def calcular_precos_licitacao(client, licitacao: dict) -> dict | None:
         "calculado_em": datetime.utcnow().isoformat(),
     }
 
-    result = client.table("preco_referencia_licitacao").upsert(
+    client.table("preco_referencia_licitacao").upsert(
         registro, on_conflict="licitacao_id"
-    ).select("id").execute()
+    ).execute()
 
-    if not result.data:
+    # Busca o ID do registro inserido/atualizado
+    id_result = client.table("preco_referencia_licitacao").select("id").eq(
+        "licitacao_id", lic_id
+    ).single().execute()
+
+    if not id_result.data:
         log.error("Falha ao gravar resumo de preços para %s", lic_id)
         return None
 
-    ref_id = result.data[0]["id"]
+    ref_id = id_result.data["id"]
 
     # Limpa detalhes antigos (cascade não funciona em upsert)
     client.table("preco_referencia_detalhe").delete().eq("preco_referencia_id", ref_id).execute()

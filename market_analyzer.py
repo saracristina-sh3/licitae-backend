@@ -285,14 +285,24 @@ def _gravar_resultados(client, uf: str | None, comparaveis: list[dict], resumo_p
             "calculado_em": agora,
         }
 
-        result = client.table("comparativo_itens").upsert(
+        client.table("comparativo_itens").upsert(
             item_row, on_conflict="chave_agrupamento,uf"
-        ).select("id").execute()
+        ).execute()
 
-        if not result.data:
+        # Busca o ID do item inserido/atualizado
+        if uf:
+            id_result = client.table("comparativo_itens").select("id").eq(
+                "chave_agrupamento", item["chave"]
+            ).eq("uf", uf).single().execute()
+        else:
+            id_result = client.table("comparativo_itens").select("id").eq(
+                "chave_agrupamento", item["chave"]
+            ).is_("uf", "null").single().execute()
+
+        if not id_result.data:
             continue
 
-        item_id = result.data[0]["id"]
+        item_id = id_result.data["id"]
 
         preco_rows = [{
             "comparativo_item_id": item_id,
