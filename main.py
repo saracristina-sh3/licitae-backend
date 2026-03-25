@@ -262,6 +262,18 @@ def executar_comparativo_mercado():
         log.error("Erro no comparativo de mercado: %s", e)
 
 
+def executar_precos_referencia():
+    """Calcula preços de referência para licitações abertas."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando preços de referência")
+        return
+    try:
+        from price_analyzer import calcular_precos_pendentes
+        calcular_precos_pendentes()
+    except Exception as e:
+        log.error("Erro nos preços de referência: %s", e)
+
+
 def executar_envio_convites():
     """Envia emails de convite pendentes."""
     if not _supabase_disponivel():
@@ -292,6 +304,7 @@ def agendar():
     schedule.every().day.at("14:00").do(executar_coleta_itens)
     schedule.every().day.at("15:00").do(executar_coleta_resultados)
     schedule.every().day.at("16:00").do(executar_comparativo_mercado)
+    schedule.every().day.at("17:00").do(executar_precos_referencia)
 
     # Executa imediatamente na primeira vez
     executar_busca()
@@ -302,6 +315,7 @@ def agendar():
     executar_coleta_itens()
     executar_coleta_resultados()
     executar_comparativo_mercado()
+    executar_precos_referencia()
 
     while True:
         schedule.run_pending()
@@ -338,6 +352,7 @@ def main():
     parser.add_argument("--uf-coleta", help="Filtrar coleta por UF (ex: MG)")
     parser.add_argument("--dias-coleta", type=int, default=30, help="Dias retroativos para coleta (padrão: 30)")
     parser.add_argument("--calcular-comparativo", action="store_true", help="Calcula comparativo de mercado entre plataformas")
+    parser.add_argument("--calcular-precos", action="store_true", help="Calcula preços de referência para licitações abertas")
 
     args = parser.parse_args()
     _setup_logging(args.verbose)
@@ -407,6 +422,10 @@ def main():
 
     if args.calcular_comparativo:
         executar_comparativo_mercado()
+        return
+
+    if args.calcular_precos:
+        executar_precos_referencia()
         return
 
     if args.agendar:
