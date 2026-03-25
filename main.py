@@ -250,6 +250,18 @@ def executar_coleta_plataforma(id_usuario: int, dias: int = 30, uf: str | None =
         log.error("Erro na coleta por plataforma: %s", e)
 
 
+def executar_comparativo_mercado():
+    """Calcula comparativo de mercado entre plataformas."""
+    if not _supabase_disponivel():
+        log.info("Supabase não configurado, pulando comparativo de mercado")
+        return
+    try:
+        from market_analyzer import executar_comparativo
+        executar_comparativo()
+    except Exception as e:
+        log.error("Erro no comparativo de mercado: %s", e)
+
+
 def executar_envio_convites():
     """Envia emails de convite pendentes."""
     if not _supabase_disponivel():
@@ -269,6 +281,7 @@ def agendar():
     log.info("  Monitoramento de mudanças: a cada 4 horas")
     log.info("  Verificação de prazos: diária às 08:00")
     log.info("  Análise de editais: diária às 13:00")
+    log.info("  Comparativo de mercado: diária às 16:00")
     log.info("Pressione Ctrl+C para parar.")
 
     schedule.every().day.at("12:00").do(executar_busca)
@@ -278,6 +291,7 @@ def agendar():
     schedule.every(30).minutes.do(executar_envio_convites)
     schedule.every().day.at("14:00").do(executar_coleta_itens)
     schedule.every().day.at("15:00").do(executar_coleta_resultados)
+    schedule.every().day.at("16:00").do(executar_comparativo_mercado)
 
     # Executa imediatamente na primeira vez
     executar_busca()
@@ -287,6 +301,7 @@ def agendar():
     executar_envio_convites()
     executar_coleta_itens()
     executar_coleta_resultados()
+    executar_comparativo_mercado()
 
     while True:
         schedule.run_pending()
@@ -322,6 +337,7 @@ def main():
     parser.add_argument("--limite-itens", type=int, default=100, help="Limite de licitações para coleta (padrão: 100)")
     parser.add_argument("--uf-coleta", help="Filtrar coleta por UF (ex: MG)")
     parser.add_argument("--dias-coleta", type=int, default=30, help="Dias retroativos para coleta (padrão: 30)")
+    parser.add_argument("--calcular-comparativo", action="store_true", help="Calcula comparativo de mercado entre plataformas")
 
     args = parser.parse_args()
     _setup_logging(args.verbose)
@@ -387,6 +403,10 @@ def main():
             dias=args.dias_coleta,
             uf=args.uf_coleta,
         )
+        return
+
+    if args.calcular_comparativo:
+        executar_comparativo_mercado()
         return
 
     if args.agendar:
