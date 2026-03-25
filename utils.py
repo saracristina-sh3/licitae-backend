@@ -90,6 +90,14 @@ def classificar_relevancia(
     return "BAIXA"
 
 
+def match_termos_exclusao(texto: str, termos_exclusao: list[str]) -> bool:
+    """Retorna True se o texto contém algum termo de exclusão (normalizado)."""
+    if not termos_exclusao:
+        return False
+    texto_norm = normalizar(texto)
+    return any(normalizar(t) in texto_norm for t in termos_exclusao)
+
+
 def detectar_me_epp(texto: str, termos: list[str] | None = None) -> bool:
     """Detecta se a licitação é exclusiva para ME/EPP."""
     termos = termos or TERMOS_ME_EPP

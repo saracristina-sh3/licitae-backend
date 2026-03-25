@@ -89,6 +89,30 @@ def _config_padrao() -> dict:
     }
 
 
+def carregar_termos_exclusao() -> dict[str, list[str]]:
+    """
+    Carrega termos de exclusão de todas as organizações.
+    Retorna dict org_id -> lista de termos.
+    """
+    if not _supabase_disponivel():
+        return {}
+
+    try:
+        from db import get_client
+        client = get_client()
+        result = client.table("org_termos_exclusao").select("org_id, termo").execute()
+        rows = result.data or []
+
+        exclusoes: dict[str, list[str]] = {}
+        for row in rows:
+            oid = row["org_id"]
+            exclusoes.setdefault(oid, []).append(row["termo"])
+        return exclusoes
+    except Exception as e:
+        log.error("Erro ao carregar termos de exclusão: %s", e)
+        return {}
+
+
 def _normalizar_config(c: dict) -> dict:
     """Garante que todos os campos existem."""
     padrao = _config_padrao()

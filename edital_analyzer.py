@@ -177,8 +177,8 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
         if existing and existing.data:
             log.debug("Licitação %s já analisada, pulando", licitacao_id)
             return existing.data
-    except Exception:
-        pass  # Tabela pode não existir ainda
+    except Exception as e:
+        log.warning("Erro ao verificar análise existente para %s: %s", licitacao_id, e)
 
     # Busca lista de documentos no PNCP
     try:
@@ -194,7 +194,7 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
         return None
 
     if not isinstance(arquivos, list) or not arquivos:
-        log.debug("Sem arquivos para licitação %s", licitacao_id)
+        log.warning("Sem arquivos para licitação %s (resposta: %s)", licitacao_id, type(arquivos).__name__)
         return None
 
     # Busca o edital (primeiro PDF disponível)
@@ -210,13 +210,13 @@ def analisar_licitacao(licitacao_id: str, cnpj: str, ano: int, seq: int) -> dict
                 break
 
     if not pdf_bytes:
-        log.debug("Nenhum PDF baixável para licitação %s", licitacao_id)
+        log.warning("Nenhum PDF baixável para licitação %s (%d URLs testadas)", licitacao_id, len(arquivos))
         return None
 
     # Extrai texto
     texto = extrair_texto_pdf(pdf_bytes)
     if not texto or len(texto) < 100:
-        log.debug("Texto extraído muito curto para licitação %s", licitacao_id)
+        log.warning("Texto extraído muito curto para licitação %s (%d chars)", licitacao_id, len(texto) if texto else 0)
         return None
 
     # Analisa
@@ -296,14 +296,18 @@ def analisar_licitacoes_pendentes(limite: int = 10):
         url = lic.get("url_fonte", "")
         match = re.search(r"/editais/([^/]+)/(\d+)/(\d+)", url)
         if not match:
+            log.warning("URL não bate com padrão esperado para licitação %s: %s", lic["id"], url)
+            erros += 1
             continue
 
         cnpj, ano, seq = match.group(1), int(match.group(2)), int(match.group(3))
+        log.info("Processando licitação %s (cnpj=%s, ano=%d, seq=%d)", lic["id"], cnpj, ano, seq)
 
         resultado = analisar_licitacao(lic["id"], cnpj, ano, seq)
         if resultado:
             analisadas += 1
         else:
+            log.warning("Falha ao analisar licitação %s", lic["id"])
             erros += 1
 
     log.info("Análise concluída: %d analisadas, %d erros", analisadas, erros)
