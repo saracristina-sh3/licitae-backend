@@ -21,7 +21,7 @@ def limpar_referencia_existente(client, licitacao_id: str) -> None:
         client.table("preco_referencia_licitacao")
         .select("id")
         .eq("licitacao_id", licitacao_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
     if existing.data:
