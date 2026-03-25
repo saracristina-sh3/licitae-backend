@@ -201,9 +201,9 @@ class TextSearchStrategy:
                 .select(select)
                 .neq("id", lic_id)
                 .gte("data_publicacao", data_limite)
-                .text_search("objeto", termos_busca, {"type": "websearch"})
                 .order("data_publicacao", desc=True)
                 .limit(30)
+                .text_search("objeto", termos_busca, {"type": "websearch"})
             )
             if modalidade:
                 q = q.eq("modalidade", modalidade)
@@ -297,9 +297,9 @@ class TextSearchStrategy:
                 client.table("itens_contratacao")
                 .select(SELECT_ITENS)
                 .gt("valor_unitario_estimado", 0)
-                .text_search("descricao", termos_busca, {"type": "websearch"})
                 .order("created_at", desc=True)
                 .limit(50)
+                .text_search("descricao", termos_busca, {"type": "websearch"})
             )
             if filtro_uf and uf:
                 q = q.eq("uf", uf)
