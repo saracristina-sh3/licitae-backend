@@ -452,12 +452,11 @@ def _buscar_licitacoes_pendentes(limite: int, client) -> list[dict]:
         log.debug("RPC licitacoes_sem_analise indisponível, usando fallback de duas queries")
         result = (
             client.table("licitacoes")
-            .select("id, cnpj_orgao, ano_compra, seq_compra")
+            .select("id, cnpj_orgao, url_fonte")
             .eq("proposta_aberta", True)
             .eq("fonte", "PNCP")
             .not_.is_("cnpj_orgao", "null")
-            .not_.is_("ano_compra", "null")
-            .not_.is_("seq_compra", "null")
+            .not_.is_("url_fonte", "null")
             .order("relevancia", desc=False)
             .order("data_publicacao", desc=True)
             .limit(limite * 3)  # margem para descarte das já analisadas
