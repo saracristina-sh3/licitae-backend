@@ -157,7 +157,8 @@ def _unidades_compativeis(u1: str, u2: str) -> bool:
         {"un", "und", "unid", "unidade", "peca", "pc"},
         {"kg", "quilo", "quilograma"},
         {"l", "lt", "litro"},
-        {"m", "metro", "ml", "metro linear"},
+        {"m", "metro", "metro linear"},
+        {"ml", "mililitro"},
         {"m2", "m²", "metro quadrado"},
         {"cx", "caixa"},
         {"pct", "pacote"},
@@ -273,7 +274,8 @@ class TextSearchStrategy:
                 compativel_unidade=True,
             ))
 
-        # Ordenar por score decrescente
+        # Filtrar por score mínimo e ordenar
+        resultados = [r for r in resultados if r["score"] >= 20]
         resultados.sort(key=lambda r: r["score"], reverse=True)
         return resultados
 
@@ -285,12 +287,19 @@ class TextSearchStrategy:
         """Busca itens similares com score, fonte e compatibilidade de unidade."""
         objeto = licitacao.get("objeto", "")
         uf = licitacao.get("uf", "")
-        termos_ref = _extrair_termos(objeto)
+        palavras_chave = licitacao.get("palavras_chave") or []
+
+        # Prioriza palavras-chave (mais relevantes) sobre termos do objeto
+        if palavras_chave:
+            termos_ref = _extrair_termos(" ".join(palavras_chave[:5]))
+        else:
+            termos_ref = _extrair_termos(objeto)
 
         if not termos_ref:
             return []
 
-        termos_busca = " & ".join(termos_ref[:3])
+        # Usa AND (&) para exigir TODOS os termos — evita matches genéricos
+        termos_busca = " & ".join(termos_ref[:4])
 
         def _query(filtro_uf: bool):
             q = (
@@ -381,5 +390,8 @@ class TextSearchStrategy:
                 compativel_unidade=compativel,
             ))
 
+        # Filtrar por score mínimo — evita itens sem relação real
+        # (ex: "cessão" de software matchando com "cessão" de cópias)
+        resultados = [r for r in resultados if r["score"] >= 25]
         resultados.sort(key=lambda r: r["score"], reverse=True)
         return resultados
