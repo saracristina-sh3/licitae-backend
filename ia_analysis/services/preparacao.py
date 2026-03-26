@@ -72,19 +72,31 @@ def preparar_contexto(client, licitacao_id: str) -> dict:
     if precos.data:
         precos_data = precos.data[0]
 
-    # Itens
-    itens = (
-        client.table("itens_contratacao")
-        .select(
-            "descricao, unidade_medida, quantidade, "
-            "valor_unitario_estimado, valor_total_estimado, "
-            "resultados_item(valor_unitario_homologado, nome_fornecedor, percentual_desconto)"
+    # Itens similares (da tabela de preços de referência, que já foi calculada)
+    itens_data = []
+    if precos_data:
+        ref_result = (
+            client.table("preco_referencia_licitacao")
+            .select("id")
+            .eq("licitacao_id", licitacao_id)
+            .limit(1)
+            .execute()
         )
-        .eq("licitacao_id", licitacao_id)
-        .order("numero_item")
-        .limit(50)
-        .execute()
-    )
+        if ref_result.data:
+            ref_id = ref_result.data[0]["id"]
+            itens_ref = (
+                client.table("preco_referencia_itens")
+                .select(
+                    "descricao, unidade_medida, valor_unitario, "
+                    "plataforma_nome, municipio, uf, nome_fornecedor, "
+                    "percentual_desconto, fonte_preco"
+                )
+                .eq("preco_referencia_id", ref_id)
+                .order("score_similaridade", desc=True)
+                .limit(30)
+                .execute()
+            )
+            itens_data = itens_ref.data or []
 
     # Comparativo da UF
     comparativo_data = None
@@ -125,7 +137,7 @@ def preparar_contexto(client, licitacao_id: str) -> dict:
         "licitacao": licitacao,
         "edital": edital_data,
         "precos": precos_data,
-        "itens": itens.data or [],
+        "itens": itens_data,
         "comparativo": comparativo_data,
         "org": {
             **(org_data or {}),
