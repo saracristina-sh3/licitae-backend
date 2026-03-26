@@ -106,7 +106,7 @@ def preparar_contexto(client, licitacao_id: str) -> dict:
             client.table("comparativo_plataformas")
             .select("plataforma_nome, total_itens, vitorias, desconto_medio")
             .eq("uf", uf)
-            .order("created_at", desc=True)
+            .order("calculado_em", desc=True)
             .limit(10)
             .execute()
         )

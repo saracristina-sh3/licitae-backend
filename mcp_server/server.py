@@ -149,21 +149,26 @@ async def detalhar_licitacao(licitacao_id: str) -> str:
         client.table("preco_referencia_licitacao").select("*")
         .eq("licitacao_id", licitacao_id).limit(1).execute()
     )
-    itens = (
-        client.table("itens_contratacao")
-        .select(
-            "descricao, unidade_medida, quantidade, valor_unitario_estimado, "
-            "valor_total_estimado, ncm_nbs_codigo, "
-            "resultados_item(valor_unitario_homologado, nome_fornecedor, percentual_desconto)"
+    # Itens: busca via hash_dedup da licitação
+    itens_data = []
+    hash_dedup = lic.data[0].get("hash_dedup")
+    if hash_dedup:
+        itens = (
+            client.table("itens_contratacao")
+            .select(
+                "descricao, unidade_medida, quantidade, valor_unitario_estimado, "
+                "valor_total_estimado, ncm_nbs_codigo, "
+                "resultados_item(valor_unitario_homologado, nome_fornecedor, percentual_desconto)"
+            )
+            .eq("licitacao_hash", hash_dedup).order("numero_item").limit(100).execute()
         )
-        .eq("licitacao_id", licitacao_id).order("numero_item").limit(100).execute()
-    )
+        itens_data = itens.data or []
 
     return json.dumps({
         "licitacao": lic.data[0],
         "analise_edital": edital.data[0] if edital.data else None,
         "precos_referencia": precos.data[0] if precos.data else None,
-        "itens": itens.data or [],
+        "itens": itens_data,
     }, ensure_ascii=False, default=str)
 
 
@@ -340,12 +345,12 @@ async def consultar_comparativo_mercado(uf: str = "") -> str:
     query_plat = client.table("comparativo_plataformas").select("*")
     if uf:
         query_plat = query_plat.eq("uf", uf.upper())
-    plat_result = query_plat.order("created_at", desc=True).limit(50).execute()
+    plat_result = query_plat.order("calculado_em", desc=True).limit(50).execute()
 
     query_itens = client.table("comparativo_itens").select("*")
     if uf:
         query_itens = query_itens.eq("uf", uf.upper())
-    itens_result = query_itens.order("created_at", desc=True).limit(200).execute()
+    itens_result = query_itens.order("calculado_em", desc=True).limit(200).execute()
 
     return json.dumps({
         "total_plataformas": len(plat_result.data or []),
@@ -475,22 +480,27 @@ async def avaliar_oportunidade(licitacao_id: str) -> str:
         client.table("preco_referencia_licitacao").select("*")
         .eq("licitacao_id", licitacao_id).limit(1).execute()
     )
-    itens = (
-        client.table("itens_contratacao")
-        .select(
-            "descricao, unidade_medida, quantidade, valor_unitario_estimado, "
-            "valor_total_estimado, ncm_nbs_codigo, "
-            "resultados_item(valor_unitario_homologado, nome_fornecedor, percentual_desconto)"
+    # Itens via hash_dedup
+    itens_data = []
+    hash_dedup = licitacao.get("hash_dedup")
+    if hash_dedup:
+        itens = (
+            client.table("itens_contratacao")
+            .select(
+                "descricao, unidade_medida, quantidade, valor_unitario_estimado, "
+                "valor_total_estimado, ncm_nbs_codigo, "
+                "resultados_item(valor_unitario_homologado, nome_fornecedor, percentual_desconto)"
+            )
+            .eq("licitacao_hash", hash_dedup).order("numero_item").limit(100).execute()
         )
-        .eq("licitacao_id", licitacao_id).order("numero_item").limit(100).execute()
-    )
+        itens_data = itens.data or []
 
     comparativo = None
     uf_lic = licitacao.get("uf")
     if uf_lic:
         comp = (
             client.table("comparativo_plataformas").select("*")
-            .eq("uf", uf_lic).order("created_at", desc=True).limit(20).execute()
+            .eq("uf", uf_lic).order("calculado_em", desc=True).limit(20).execute()
         )
         comparativo = comp.data or None
 
@@ -498,7 +508,7 @@ async def avaliar_oportunidade(licitacao_id: str) -> str:
         "licitacao": licitacao,
         "analise_edital": edital.data[0] if edital.data else None,
         "precos_referencia": preco_ref.data[0] if preco_ref.data else None,
-        "itens": itens.data or [],
+        "itens": itens_data,
         "comparativo_plataformas": comparativo,
     }, ensure_ascii=False, default=str)
 
