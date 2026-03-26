@@ -82,16 +82,28 @@ def carregar_municipios(ufs: list[str], populacao_maxima: int) -> list[dict]:
     if os.path.exists(CACHE_FILE) and os.path.getsize(CACHE_FILE) > 2 and not _cache_expirado():
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             cached = json.load(f)
-            return [
-                m for m in cached
-                if m["uf"] in ufs and m["populacao"] <= populacao_maxima
-            ]
+            # Verifica se o cache contém TODAS as UFs solicitadas
+            ufs_no_cache = {m["uf"] for m in cached}
+            ufs_faltando = set(ufs) - ufs_no_cache
+            if not ufs_faltando:
+                return [
+                    m for m in cached
+                    if m["uf"] in ufs and m["populacao"] <= populacao_maxima
+                ]
+            log.info("Cache não contém UFs %s, recarregando...", ", ".join(sorted(ufs_faltando)))
 
     if _cache_expirado() and os.path.exists(CACHE_FILE):
         log.info("Cache de municípios expirado (>%d dias), atualizando...", CACHE_TTL_DIAS)
 
     log.info("Carregando municípios do IBGE (busca em lote)...")
+
+    # Carrega cache existente para mesclar (não perder UFs já baixadas)
     todos = []
+    if os.path.exists(CACHE_FILE) and os.path.getsize(CACHE_FILE) > 2:
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+            # Mantém UFs que NÃO serão rebuscadas
+            todos = [m for m in cached if m["uf"] not in ufs]
 
     for uf in ufs:
         uf_code = UF_CODES.get(uf)
