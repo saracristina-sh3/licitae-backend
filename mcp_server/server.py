@@ -686,11 +686,50 @@ async def _run_sse_with_auth(port: int) -> None:
     async def health(request):
         return JSONResponse({"status": "ok", "server": MCP_SERVER_NAME})
 
+    async def handle_analise_ia(request):
+        """Endpoint REST para análise IA sob demanda."""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "JSON inválido"}, status_code=400)
+
+        licitacao_id = body.get("licitacao_id")
+        if not licitacao_id:
+            return JSONResponse({"error": "licitacao_id é obrigatório"}, status_code=400)
+
+        tipo = body.get("tipo", "completa")
+        if tipo not in ("completa", "edital"):
+            return JSONResponse({"error": "tipo deve ser 'completa' ou 'edital'"}, status_code=400)
+
+        try:
+            client = _get_supabase_client()
+            from ia_analysis.services.analise import analisar
+            resultado = analisar(client, licitacao_id, tipo=tipo)
+            return JSONResponse({
+                "ok": True,
+                "analise": resultado["analise"],
+                "metadados": {
+                    "modelo": resultado["modelo_usado"],
+                    "tokens_input": resultado["tokens_input"],
+                    "tokens_output": resultado["tokens_output"],
+                    "custo_usd": resultado["custo_usd"],
+                    "tempo_ms": resultado["tempo_ms"],
+                },
+            })
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=404)
+        except RuntimeError as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+        except Exception as e:
+            log.error("Erro na análise IA: %s", e, exc_info=True)
+            return JSONResponse({"error": "Erro interno na análise"}, status_code=500)
+
     app = Starlette(
         routes=[
             Route("/health", health),
             Route("/sse", endpoint=handle_sse),
             Route("/messages/", endpoint=handle_messages, methods=["POST"]),
+            Route("/api/analise-ia", endpoint=handle_analise_ia, methods=["POST"]),
         ],
         middleware=[Middleware(AuthMiddleware)],
     )
