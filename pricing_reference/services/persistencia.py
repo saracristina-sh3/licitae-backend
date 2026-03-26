@@ -106,10 +106,14 @@ def gravar_detalhes_itens(
         nome_forn = ""
 
         if resultado_usado:
-            d = resultado_usado.get("percentual_desconto")
-            if d is not None and 0 <= d <= DESCONTO_MAXIMO:
-                desc = round(float(d), 2)
             nome_forn = (resultado_usado.get("nome_fornecedor") or "")[:100]
+            # Recalcula desconto a partir dos valores reais
+            estimado = float(item.get("valor_unitario_estimado", 0) or 0)
+            homologado = float(resultado_usado.get("valor_unitario_homologado", 0) or 0)
+            if estimado > 0 and homologado > 0:
+                d = ((estimado - homologado) / estimado) * 100
+                if 0 <= d <= DESCONTO_MAXIMO:
+                    desc = round(d, 2)
 
         rows.append({
             "preco_referencia_id": ref_id,

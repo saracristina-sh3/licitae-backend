@@ -14,6 +14,20 @@ from __future__ import annotations
 from market_comparison.constants import DESCONTO_MAXIMO
 
 
+def _calcular_desconto(estimado: float, homologado: float) -> float | None:
+    """
+    Calcula desconto real: (estimado - homologado) / estimado * 100.
+    Ignora a API do PNCP que pode ter valores inconsistentes.
+    Retorna None se não for possível calcular ou se fora da faixa válida.
+    """
+    if estimado <= 0 or homologado <= 0:
+        return None
+    desconto = ((estimado - homologado) / estimado) * 100
+    if 0 <= desconto <= DESCONTO_MAXIMO:
+        return round(desconto, 2)
+    return None
+
+
 def selecionar_preco(
     resultados_item: list[dict],
     valor_estimado: float,
@@ -25,14 +39,18 @@ def selecionar_preco(
     1. Menor homologado válido (> 0) → fonte="homologado"
     2. Estimado como fallback → fonte="estimado"
 
+    Desconto: recalculado a partir de (estimado - homologado) / estimado.
+    Não usa percentual_desconto da API (dados inconsistentes).
+
     Retorna (valor, fonte_preco, desconto).
     """
     if isinstance(resultados_item, dict):
         resultados_item = [resultados_item]
 
+    est = float(valor_estimado) if valor_estimado else 0.0
+
     # Busca menor homologado válido
     melhor_hom = None
-    melhor_desconto = None
 
     for r in resultados_item:
         v = r.get("valor_unitario_homologado", 0)
@@ -40,14 +58,13 @@ def selecionar_preco(
             fv = float(v)
             if melhor_hom is None or fv < melhor_hom:
                 melhor_hom = fv
-                d = r.get("percentual_desconto")
-                melhor_desconto = float(d) if d is not None and 0 <= d <= DESCONTO_MAXIMO else None
 
     if melhor_hom is not None:
-        return melhor_hom, "homologado", melhor_desconto
+        desconto = _calcular_desconto(est, melhor_hom)
+        return melhor_hom, "homologado", desconto
 
     # Fallback: estimado
-    if valor_estimado and float(valor_estimado) > 0:
-        return float(valor_estimado), "estimado", None
+    if est > 0:
+        return est, "estimado", None
 
     return 0.0, "estimado", None

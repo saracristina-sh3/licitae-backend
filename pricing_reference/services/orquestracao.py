@@ -118,14 +118,17 @@ def processar_licitacao(client, licitacao: dict) -> dict | None:
     itens_limpos = remover_outliers_iqr(valores_itens)
     resumo_itens = calcular_resumo(itens_limpos)
 
-    # Desconto médio dos itens
+    # Desconto médio dos itens — recalculado a partir dos valores reais
+    # Não usa percentual_desconto da API (dados inconsistentes)
     descontos = []
     for s in similares_itens:
-        r = s["registro"].get("_resultado_usado")
-        if r:
-            d = r.get("percentual_desconto")
-            if d is not None and 0 <= d <= DESCONTO_MAXIMO:
-                descontos.append(float(d))
+        reg = s["registro"]
+        estimado = float(reg.get("valor_unitario_estimado", 0) or 0)
+        homologado = s["valor"] if s["fonte_preco"] == "homologado" else 0
+        if estimado > 0 and homologado > 0:
+            desc = ((estimado - homologado) / estimado) * 100
+            if 0 <= desc <= DESCONTO_MAXIMO:
+                descontos.append(round(desc, 2))
     desconto_medio = round(sum(descontos) / len(descontos), 2) if descontos else None
 
     # ── 5. Score de confiabilidade ──

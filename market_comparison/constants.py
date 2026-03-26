@@ -9,7 +9,7 @@ METODO_AGRUPAMENTO = "ncm_lexical"
 METODO_OUTLIER = "iqr"
 DESCONTO_MAXIMO = 80.0
 RAZAO_MAXIMA_ESCALA = 50
-LIMITE_ITENS_POR_PLATAFORMA = 5000
+LIMITE_ITENS_POR_PLATAFORMA = 10000
 
 # ── Plataformas concorrentes ─────────────────────────────────
 
@@ -18,6 +18,7 @@ CONCORRENTES: dict[int, str] = {
     12: "BLL Compras (BNC)",
     13: "Licitar Digital",
     18: "Licitanet",
+    3: "Compras.gov.br",
 }
 
 # Permite adicionar via env (ex: PLATAFORMAS_COMPARATIVO=121,12,13,18,999)

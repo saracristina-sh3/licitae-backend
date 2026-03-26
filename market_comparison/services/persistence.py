@@ -165,6 +165,7 @@ def buscar_itens_plataforma(client, plat_id: int, uf: str | None, limite: int) -
         .select(SELECT_ITENS)
         .gt("valor_unitario_estimado", 0)
         .eq("plataforma_id", plat_id)
+        .order("created_at", desc=True)
         .limit(limite)
     )
     if uf:
