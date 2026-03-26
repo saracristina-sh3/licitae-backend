@@ -646,6 +646,60 @@ async def consultar_pncp_direto(
 #  Entry point
 # ═════════════════════════════════════════════════════════════════
 
+async def _run_sse_with_auth(port: int) -> None:
+    """Roda SSE com middleware de autenticação via MCP_AUTH_TOKEN."""
+    import os
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+    from starlette.responses import JSONResponse
+    from starlette.middleware import Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from mcp.server.sse import SseServerTransport
+
+    auth_token = os.environ.get("MCP_AUTH_TOKEN", "")
+    if not auth_token:
+        log.warning("MCP_AUTH_TOKEN não definido — endpoint SSE sem proteção!")
+
+    class AuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            if request.url.path == "/health":
+                return await call_next(request)
+            if auth_token:
+                header = request.headers.get("Authorization", "")
+                if header != f"Bearer {auth_token}":
+                    return JSONResponse({"error": "unauthorized"}, status_code=401)
+            return await call_next(request)
+
+    sse = SseServerTransport("/messages/")
+
+    async def handle_sse(request):
+        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+            await mcp._mcp_server.run(
+                streams[0], streams[1],
+                mcp._mcp_server.create_initialization_options(),
+            )
+
+    async def handle_messages(request):
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    async def health(request):
+        return JSONResponse({"status": "ok", "server": MCP_SERVER_NAME})
+
+    app = Starlette(
+        routes=[
+            Route("/health", health),
+            Route("/sse", endpoint=handle_sse),
+            Route("/messages/", endpoint=handle_messages, methods=["POST"]),
+        ],
+        middleware=[Middleware(AuthMiddleware)],
+    )
+
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 def main() -> None:
     import argparse
 
@@ -667,9 +721,8 @@ def main() -> None:
     )
 
     if args.transport == "sse":
-        mcp.settings.host = "0.0.0.0"
-        mcp.settings.port = args.port
-        mcp.run(transport="sse")
+        import asyncio
+        asyncio.run(_run_sse_with_auth(args.port))
     else:
         mcp.run(transport="stdio")
 
