@@ -30,14 +30,15 @@ else:
 
 # ── Stopwords para agrupamento ───────────────────────────────
 
+# Stopwords mínimas — apenas preposições/artigos genéricos.
+# NÃO remover "contratacao", "servicos", "prestacao" etc.
+# pois fazem parte de descrições como "prestação de serviços de manutenção"
+# onde a distinção importa para o agrupamento.
 STOPWORDS: frozenset[str] = frozenset({
     "de", "do", "da", "dos", "das", "para", "com", "por", "que", "uma",
     "um", "seu", "sua", "nos", "nas", "pelo", "pela", "aos", "entre",
-    "sobre", "apos", "ate", "sem", "como", "mais",
-    "contratacao", "empresa", "especializada", "prestacao", "servicos",
-    "servico", "aquisicao", "fornecimento", "objeto", "registro",
-    "preco", "precos", "lote", "item", "itens", "tipo", "modalidade",
-    "processo", "licitatorio", "pregao", "eletronico", "presencial",
+    "sobre", "apos", "ate", "sem", "como", "mais", "este", "esta",
+    "esse", "essa", "tipo", "lote", "item", "itens",
 })
 
 # ── Score de comparabilidade — pesos (total = 100) ──────────

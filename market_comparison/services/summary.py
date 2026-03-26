@@ -72,10 +72,10 @@ def calcular_resumo_plataformas(
             if grupo.faixa_confiabilidade == "alta":
                 acc["grupos_alta"] += 1
 
-            # Delta para líder
+            # Delta para líder (capped em 500% para evitar outliers extremos)
             if menor_valor and menor_valor > 0 and stats.resumo["media"]:
                 delta = ((stats.resumo["media"] - menor_valor) / menor_valor) * 100
-                acc["deltas"].append(delta)
+                acc["deltas"].append(min(delta, 500.0))
 
             # Vitórias
             if nome == vencedora:

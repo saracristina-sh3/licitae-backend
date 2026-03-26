@@ -12,10 +12,10 @@ from market_comparison.types import ObservedItem
 
 
 def _extrair_palavras_chave(descricao: str) -> list[str]:
-    """Extrai palavras significativas (sem stopwords, >3 chars, só alfabéticos)."""
+    """Extrai palavras significativas (sem stopwords, >2 chars, só alfabéticos)."""
     return [
         p for p in normalizar(descricao).split()
-        if len(p) > 3 and p.isalpha() and p not in STOPWORDS
+        if len(p) > 2 and p.isalpha() and p not in STOPWORDS
     ]
 
 
@@ -24,7 +24,10 @@ class NcmLexicalStrategy:
     Agrupamento por NCM (quando disponível) ou palavras-chave da descrição.
     Inclui unidade normalizada na chave para garantir comparabilidade.
 
-    Chave: "ncm:{ncm}:{unidade}" ou "desc:{palavras}:{unidade}"
+    Chave: "ncm:{ncm}:{unidade}" ou "desc:{3 palavras}:{unidade}"
+
+    Usa 3 palavras (não 5) para maximizar sobreposição entre plataformas
+    que descrevem o mesmo produto de formas ligeiramente diferentes.
     """
 
     def gerar_chave(self, item: ObservedItem) -> str:
@@ -36,8 +39,8 @@ class NcmLexicalStrategy:
         if item.ncm:
             return f"ncm:{item.ncm}:{unidade_chave}"
 
-        palavras = _extrair_palavras_chave(item.descricao)[:5]
+        palavras = _extrair_palavras_chave(item.descricao)[:3]
         if len(palavras) < 2:
-            return ""  # Descrição muito genérica
+            return ""  # Descrição muito curta
 
         return f"desc:{' '.join(palavras)}:{unidade_chave}"
