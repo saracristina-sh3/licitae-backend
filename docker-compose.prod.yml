@@ -23,6 +23,30 @@ services:
           memory: 512M
 
 
+  # MCP Server — expõe dados para análise por IA
+  licitae-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: licitae-mcp
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Sao_Paulo
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+
 volumes:
   relatorios:
   cache_municipios:
