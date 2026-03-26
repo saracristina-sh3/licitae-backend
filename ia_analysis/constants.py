@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-MODELO_PADRAO = "gemini-2.0-flash"
-MODELO_TRIAGEM = "gemini-2.0-flash-lite"
-
 MAX_TOKENS_RESPOSTA = 4096
 
 # ── Prompt do sistema ────────────────────────────────────────────

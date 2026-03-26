@@ -1,4 +1,4 @@
-"""Serviço de análise IA — chama Gemini API."""
+"""Serviço de análise IA — suporta Anthropic (Claude) e Google (Gemini)."""
 
 from __future__ import annotations
 
@@ -7,11 +7,8 @@ import logging
 import os
 import time
 
-from google import genai
-
 from ia_analysis.constants import (
     MAX_TOKENS_RESPOSTA,
-    MODELO_PADRAO,
     PROMPT_EDITAL,
     PROMPT_VIABILIDADE,
     SYSTEM_PROMPT,
@@ -22,22 +19,29 @@ from ia_analysis.types import AnaliseIA, ResultadoAnalise
 
 log = logging.getLogger(__name__)
 
-# Custos por 1M tokens (USD) — Gemini 2.0 Flash
+# Custos por 1M tokens (USD)
 _CUSTOS = {
+    # Anthropic
+    "claude-sonnet-4-5-20250514": {"input": 3.0, "output": 15.0},
+    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.0},
+    # Google
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
     "gemini-2.0-flash-lite": {"input": 0.0, "output": 0.0},
 }
 
+# Modelos padrão por provider
+_MODELO_ANTHROPIC = "claude-sonnet-4-5-20250514"
+_MODELO_GEMINI = "gemini-2.0-flash"
+
 
 def _estimar_custo(modelo: str, tokens_in: int, tokens_out: int) -> float:
-    custos = _CUSTOS.get(modelo, {"input": 0.10, "output": 0.40})
+    custos = _CUSTOS.get(modelo, {"input": 1.0, "output": 5.0})
     return (tokens_in * custos["input"] + tokens_out * custos["output"]) / 1_000_000
 
 
 def _parse_resposta(texto: str) -> AnaliseIA:
     """Extrai JSON da resposta, tolerando markdown."""
     texto = texto.strip()
-    # Remove ```json ... ``` se presente
     if texto.startswith("```"):
         linhas = texto.split("\n")
         linhas = [l for l in linhas if not l.strip().startswith("```")]
@@ -58,23 +62,75 @@ def _parse_resposta(texto: str) -> AnaliseIA:
     )
 
 
+def _detectar_provider() -> tuple[str, str, str]:
+    """Detecta qual provider usar. Retorna (provider, api_key, modelo)."""
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+
+    if anthropic_key:
+        return "anthropic", anthropic_key, _MODELO_ANTHROPIC
+    if gemini_key:
+        return "gemini", gemini_key, _MODELO_GEMINI
+
+    raise RuntimeError("Nenhuma API key configurada (ANTHROPIC_API_KEY ou GEMINI_API_KEY)")
+
+
+def _chamar_anthropic(api_key: str, modelo: str, prompt: str) -> tuple[str, int, int]:
+    """Chama Claude API. Retorna (texto, tokens_in, tokens_out)."""
+    import anthropic
+
+    claude = anthropic.Anthropic(api_key=api_key)
+    response = claude.messages.create(
+        model=modelo,
+        max_tokens=MAX_TOKENS_RESPOSTA,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    texto = response.content[0].text
+    tokens_in = response.usage.input_tokens
+    tokens_out = response.usage.output_tokens
+    return texto, tokens_in, tokens_out
+
+
+def _chamar_gemini(api_key: str, modelo: str, prompt: str) -> tuple[str, int, int]:
+    """Chama Gemini API. Retorna (texto, tokens_in, tokens_out)."""
+    from google import genai
+
+    gemini = genai.Client(api_key=api_key)
+    response = gemini.models.generate_content(
+        model=modelo,
+        contents=f"{SYSTEM_PROMPT}\n\n{prompt}",
+        config={
+            "max_output_tokens": MAX_TOKENS_RESPOSTA,
+            "temperature": 0.2,
+        },
+    )
+
+    texto = response.text or ""
+    tokens_in = 0
+    tokens_out = 0
+    if response.usage_metadata:
+        tokens_in = response.usage_metadata.prompt_token_count or 0
+        tokens_out = response.usage_metadata.candidates_token_count or 0
+    return texto, tokens_in, tokens_out
+
+
 def analisar(
     client,
     licitacao_id: str,
     tipo: str = "completa",
-    modelo: str = MODELO_PADRAO,
+    modelo: str | None = None,
 ) -> ResultadoAnalise:
     """
     Executa análise IA completa de uma licitação.
 
-    1. Prepara contexto (dados do Supabase)
-    2. Chama Gemini API
-    3. Grava resultado no Supabase
-    4. Retorna resultado
+    Detecta automaticamente o provider:
+    - ANTHROPIC_API_KEY → usa Claude (prioridade)
+    - GEMINI_API_KEY → usa Gemini (fallback)
     """
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY não configurada")
+    provider, api_key, modelo_default = _detectar_provider()
+    modelo = modelo or modelo_default
 
     t0 = time.time()
 
@@ -88,33 +144,18 @@ def analisar(
     else:
         prompt = PROMPT_VIABILIDADE.format(**textos)
 
-    # 3. Chamar Gemini
-    gemini = genai.Client(api_key=api_key)
+    # 3. Chamar IA
+    log.info("[%s] Chamando %s (%s) tipo=%s...", licitacao_id[:8], provider, modelo, tipo)
 
-    log.info("[%s] Chamando Gemini (%s) tipo=%s...", licitacao_id[:8], modelo, tipo)
-
-    response = gemini.models.generate_content(
-        model=modelo,
-        contents=f"{SYSTEM_PROMPT}\n\n{prompt}",
-        config={
-            "max_output_tokens": MAX_TOKENS_RESPOSTA,
-            "temperature": 0.2,
-        },
-    )
+    if provider == "anthropic":
+        texto_resposta, tokens_in, tokens_out = _chamar_anthropic(api_key, modelo, prompt)
+    else:
+        texto_resposta, tokens_in, tokens_out = _chamar_gemini(api_key, modelo, prompt)
 
     tempo_ms = int((time.time() - t0) * 1000)
-
-    # Extrair uso de tokens
-    tokens_in = 0
-    tokens_out = 0
-    if response.usage_metadata:
-        tokens_in = response.usage_metadata.prompt_token_count or 0
-        tokens_out = response.usage_metadata.candidates_token_count or 0
-
     custo = _estimar_custo(modelo, tokens_in, tokens_out)
 
     # 4. Parse resposta
-    texto_resposta = response.text or ""
     try:
         analise = _parse_resposta(texto_resposta)
     except (json.JSONDecodeError, KeyError) as e:
@@ -147,8 +188,8 @@ def analisar(
     gravar_analise(client, licitacao_id, tipo, resultado)
 
     log.info(
-        "[%s] Análise IA: %s (score=%d) | %d in + %d out tokens | $%.4f | %dms",
-        licitacao_id[:8],
+        "[%s] %s: %s (score=%d) | %d+%d tokens | $%.4f | %dms",
+        licitacao_id[:8], provider,
         analise["recomendacao"],
         analise["score_viabilidade"],
         tokens_in, tokens_out, custo, tempo_ms,
