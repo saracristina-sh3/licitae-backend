@@ -18,6 +18,7 @@ class ObservedItem:
     valor: float
     fonte_preco: str  # 'homologado' | 'estimado'
     desconto: float | None = None
+    categoria: str = "produto"  # 'produto' | 'servico' | 'licenca' | 'consumivel'
 
 
 @dataclass

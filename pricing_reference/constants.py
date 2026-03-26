@@ -1,10 +1,13 @@
-"""Constantes centralizadas do motor de preços de referência."""
+"""Constantes do motor de preços de referência v3."""
 
 from __future__ import annotations
 
+# Reutiliza constantes compartilhadas
+from comparison_core.constants import STOPWORDS  # noqa: F401
+
 # ── Versão e metadados ───────────────────────────────────────
 
-VERSAO_ALGORITMO = "v2"
+VERSAO_ALGORITMO = "v3"
 METODO_SIMILARIDADE = "text_search"
 METODO_OUTLIER = "iqr+trimmed_mean"
 
@@ -12,18 +15,17 @@ METODO_OUTLIER = "iqr+trimmed_mean"
 
 JANELA_MESES = 12
 AMOSTRA_MINIMA = 3
-TRIM_PERCENT = 0.1  # 10% de cada extremo para trimmed mean
+TRIM_PERCENT = 0.1
 DESCONTO_MAXIMO = 80.0
 
 # ── Score de confiabilidade — pesos (total = 100) ────────────
 
-PESO_AMOSTRA = 25           # >= 10 amostras = pontuação máxima
-PESO_RECENCIA = 20          # dados dos últimos 3 meses = máxima
-PESO_HOMOLOGADOS = 20       # > 80% homologados = máxima
-PESO_BAIXA_DISPERSAO = 20   # CV < 25% = máxima
-PESO_SIMILARIDADE = 15      # score médio de similaridade > 70 = máxima
+PESO_AMOSTRA = 25
+PESO_RECENCIA = 20
+PESO_HOMOLOGADOS = 20
+PESO_BAIXA_DISPERSAO = 20
+PESO_SIMILARIDADE = 15
 
-# Faixas de confiabilidade (score >= X)
 FAIXA_ALTA = 70
 FAIXA_MEDIA = 40
 
@@ -33,23 +35,8 @@ SIM_MESMA_MODALIDADE = 20
 SIM_MESMA_UF = 15
 SIM_NCM_IGUAL = 25
 SIM_UNIDADE_IGUAL = 10
-SIM_TERMOS_COMUNS = 20     # proporcional ao % de termos em comum
-SIM_RECENTE = 10           # publicado nos últimos 6 meses
-
-# ── Stopwords para extração de termos ────────────────────────
-
-STOPWORDS: frozenset[str] = frozenset({
-    # Artigos e preposições
-    "de", "do", "da", "dos", "das", "para", "com", "por", "que", "uma",
-    "um", "seu", "sua", "nos", "nas", "pelo", "pela", "aos", "entre",
-    "sobre", "apos", "ate", "sem", "como", "mais", "este", "esta",
-    "esse", "essa", "ser", "ter", "seu", "seus", "suas",
-    # Termos genéricos de licitação
-    "contratacao", "empresa", "especializada", "prestacao", "servicos",
-    "servico", "aquisicao", "fornecimento", "objeto", "registro",
-    "preco", "precos", "lote", "item", "itens", "tipo", "modalidade",
-    "processo", "licitatorio", "pregao", "eletronico", "presencial",
-})
+SIM_TERMOS_COMUNS = 20
+SIM_RECENTE = 10
 
 # ── Query: campos selecionados para itens ────────────────────
 

@@ -1,49 +1,14 @@
 """
 Estratégia de agrupamento NCM + lexical v2.
 Gera múltiplas chaves por item para maximizar cruzamentos entre plataformas.
+Usa comparison_core para normalização e sinônimos.
 """
 
 from __future__ import annotations
 
-import re
-
-from utils import normalizar
-from market_comparison.constants import SINONIMOS, STOPWORDS
-from market_comparison.services.unit_validation import _normalizar_unidade, _grupo_da_unidade
+from comparison_core.normalizer import extrair_termos
+from comparison_core.validator import unidade_canonica
 from market_comparison.types import ObservedItem
-
-# Regex: aceita alfanuméricos mas descarta tokens puramente numéricos
-_RE_TOKEN_VALIDO = re.compile(r"^(?!\d+$)[a-z0-9]{2,}$")
-
-
-def _extrair_palavras_chave(descricao: str) -> list[str]:
-    """
-    Extrai palavras significativas da descrição.
-    - Aceita alfanuméricos (a4, usb3, 500ml) mas não puramente numéricos (123)
-    - Remove stopwords
-    - Aplica sinônimos canônicos
-    - Ordena alfabeticamente para garantir mesma chave independente da ordem
-    """
-    tokens = normalizar(descricao).split()
-    palavras = []
-    for t in tokens:
-        if not _RE_TOKEN_VALIDO.match(t):
-            continue
-        if t in STOPWORDS:
-            continue
-        # Aplica sinônimo se existir
-        t = SINONIMOS.get(t, t)
-        palavras.append(t)
-
-    # Ordena para que "papel sulfite a4" == "sulfite papel a4"
-    return sorted(set(palavras))
-
-
-def _unidade_chave(unidade: str) -> str:
-    """Normaliza unidade para usar como parte da chave."""
-    unidade = _normalizar_unidade(unidade)
-    grupo = _grupo_da_unidade(unidade)
-    return next(iter(sorted(grupo))) if grupo else unidade
 
 
 class NcmLexicalStrategy:
@@ -51,22 +16,18 @@ class NcmLexicalStrategy:
     Agrupamento NCM + lexical v2.
 
     Gera até 3 chaves por item (do mais específico ao mais genérico):
-    1. NCM exato:     ncm:{ncm_completo}:{unidade}
-    2. NCM categoria: ncm4:{ncm[:4]}:{4_palavras}:{unidade}
-    3. Lexical:       desc:{4_palavras_ordenadas}:{unidade}
+    1. NCM exato:     ncm:{ncm_completo}:{unidade}:{fonte}
+    2. NCM categoria: ncm4:{ncm[:4]}:{4_palavras}:{unidade}:{fonte}
+    3. Lexical:       desc:{4_palavras_ordenadas}:{unidade}:{fonte}
 
-    Palavras são ordenadas alfabeticamente e sinônimos aplicados,
-    garantindo que o mesmo produto gere a mesma chave entre plataformas.
+    Inclui fonte (hom/est) na chave para nunca misturar preços
+    homologados com estimados.
     """
 
     def gerar_chaves(self, item: ObservedItem) -> list[str]:
-        """Gera lista de chaves de agrupamento (múltiplas por item).
-
-        Inclui fonte (hom/est) na chave para nunca misturar preços
-        homologados com estimados — são dados de natureza diferente.
-        """
-        unidade = _unidade_chave(item.unidade)
-        palavras = _extrair_palavras_chave(item.descricao)
+        """Gera lista de chaves de agrupamento (múltiplas por item)."""
+        unidade = unidade_canonica(item.unidade)
+        palavras = extrair_termos(item.descricao, max_termos=6)
         fonte = "hom" if item.fonte_preco == "homologado" else "est"
         chaves: list[str] = []
 

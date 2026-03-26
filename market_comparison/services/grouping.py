@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from comparison_core.categories import classificar_item
 from market_comparison.constants import DESCONTO_MAXIMO
 from market_comparison.services.price_selection import selecionar_preco
 from market_comparison.services.unit_validation import validar_consistencia
@@ -33,8 +34,10 @@ def converter_item_raw(row: dict) -> ObservedItem | None:
     if valor <= 0:
         return None
 
+    descricao = (row.get("descricao") or "")[:120]
+
     return ObservedItem(
-        descricao=(row.get("descricao") or "")[:80],
+        descricao=descricao,
         ncm=row.get("ncm_nbs_codigo"),
         unidade=row.get("unidade_medida") or "",
         plataforma_nome=plataforma,
@@ -42,6 +45,7 @@ def converter_item_raw(row: dict) -> ObservedItem | None:
         valor=valor,
         fonte_preco=fonte,
         desconto=desconto,
+        categoria=classificar_item(descricao),
     )
 
 

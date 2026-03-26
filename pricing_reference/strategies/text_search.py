@@ -7,6 +7,7 @@ Implementa busca em camadas com fallback:
 3. ilike como último recurso
 
 Cada resultado recebe um score heurístico de similaridade (0-100).
+Usa comparison_core para normalização, sinônimos e validação.
 """
 
 from __future__ import annotations
@@ -15,6 +16,9 @@ import logging
 from datetime import datetime
 
 from utils import normalizar
+from comparison_core.categories import classificar_item
+from comparison_core.normalizer import extrair_termos
+from comparison_core.validator import validar_unidade
 from pricing_reference.constants import (
     AMOSTRA_MINIMA,
     SELECT_ITENS,
@@ -24,19 +28,10 @@ from pricing_reference.constants import (
     SIM_RECENTE,
     SIM_TERMOS_COMUNS,
     SIM_UNIDADE_IGUAL,
-    STOPWORDS,
 )
 from pricing_reference.types import ResultadoSimilaridade
 
 log = logging.getLogger(__name__)
-
-
-def _extrair_termos(texto: str) -> list[str]:
-    """Extrai termos significativos de um texto (sem stopwords, >3 chars, só alfabéticos)."""
-    return [
-        p for p in normalizar(texto).split()
-        if len(p) > 3 and p.isalpha() and p not in STOPWORDS
-    ]
 
 
 def _calcular_score_licitacao(
@@ -50,10 +45,8 @@ def _calcular_score_licitacao(
     Fatores:
     - Mesma modalidade: +20
     - Mesma UF: +15
-    - Termos em comum: até +20 (proporcional)
+    - Termos em comum (com sinônimos): até +20 (proporcional)
     - Recência (< 6 meses): +10
-    - NCM: +25 (não aplicável em licitações, reservado para itens)
-    - Unidade: +10 (não aplicável em licitações)
     """
     score = 0.0
 
@@ -65,14 +58,14 @@ def _calcular_score_licitacao(
     if similar.get("uf") and similar["uf"] == licitacao_ref.get("uf"):
         score += SIM_MESMA_UF
 
-    # Termos em comum
+    # Termos em comum (usa extrair_termos com sinônimos aplicados)
     if termos_ref:
-        objeto_similar = normalizar(similar.get("objeto") or "")
-        termos_comuns = sum(1 for t in termos_ref if t in objeto_similar)
+        termos_similar = extrair_termos(similar.get("objeto") or "")
+        termos_comuns = len(set(termos_ref) & set(termos_similar))
         ratio = min(termos_comuns / len(termos_ref), 1.0)
         score += SIM_TERMOS_COMUNS * ratio
 
-    # Recência (< 6 meses = máximo, até 12 meses = proporcional)
+    # Recência
     data_pub = similar.get("data_publicacao")
     if data_pub:
         try:
@@ -86,9 +79,7 @@ def _calcular_score_licitacao(
             pass
 
     # Normalizar para 0-100 (máximo possível sem NCM/unidade = 65)
-    # Escalar para usar a faixa completa
     score = min(score * (100 / 65), 100)
-
     return round(score, 2)
 
 
@@ -99,7 +90,7 @@ def _calcular_score_item(
 ) -> float:
     """
     Calcula score de similaridade (0-100) para um item.
-    Inclui NCM e unidade de medida como fatores.
+    Usa sinônimos para matching de termos. Inclui NCM e unidade.
     """
     score = 0.0
 
@@ -107,23 +98,18 @@ def _calcular_score_item(
     if item.get("uf") and item["uf"] == licitacao_ref.get("uf"):
         score += SIM_MESMA_UF
 
-    # NCM
-    # Reservado — itens_contratacao geralmente não têm NCM preenchido
-    # Se tiver, seria um match forte
-
-    # Termos em comum na descrição
+    # Termos em comum (com sinônimos aplicados)
     if termos_ref:
-        desc_item = normalizar(item.get("descricao") or "")
-        termos_comuns = sum(1 for t in termos_ref if t in desc_item)
+        termos_item = extrair_termos(item.get("descricao") or "")
+        termos_comuns = len(set(termos_ref) & set(termos_item))
         ratio = min(termos_comuns / len(termos_ref), 1.0)
         score += SIM_TERMOS_COMUNS * ratio
 
-    # Unidade de medida
-    # Não penaliza se não informado, mas bonifica se igual
-    unidade_ref = normalizar(licitacao_ref.get("unidade_medida") or "")
-    unidade_item = normalizar(item.get("unidade_medida") or "")
-    if unidade_ref and unidade_item and unidade_ref == unidade_item:
-        score += SIM_UNIDADE_IGUAL
+    # Unidade de medida (usa validação centralizada)
+    unidade_item = item.get("unidade_medida") or ""
+    # Licitações não têm unidade de referência, mas bonifica se compatível
+    if unidade_item:
+        score += SIM_UNIDADE_IGUAL * 0.5  # Bônus parcial por ter unidade
 
     # Recência
     created = item.get("created_at")
@@ -140,38 +126,7 @@ def _calcular_score_item(
 
     # Normalizar para 0-100 (máximo possível = 65 sem NCM)
     score = min(score * (100 / 65), 100)
-
     return round(score, 2)
-
-
-def _unidades_compativeis(u1: str, u2: str) -> bool:
-    """Verifica se duas unidades de medida são compatíveis."""
-    if not u1 or not u2:
-        return True  # Se não informado, assumir compatível
-    n1 = normalizar(u1).strip()
-    n2 = normalizar(u2).strip()
-    if n1 == n2:
-        return True
-    # Grupos compatíveis
-    grupos = [
-        {"un", "und", "unid", "unidade", "peca", "pc"},
-        {"kg", "quilo", "quilograma"},
-        {"l", "lt", "litro"},
-        {"m", "metro", "metro linear"},
-        {"ml", "mililitro"},
-        {"m2", "m²", "metro quadrado"},
-        {"cx", "caixa"},
-        {"pct", "pacote"},
-        {"fr", "frasco"},
-        {"tb", "tubo"},
-        {"rl", "rolo"},
-        {"mes", "mensal", "meses"},
-        {"hora", "h", "hr"},
-    ]
-    for grupo in grupos:
-        if n1 in grupo and n2 in grupo:
-            return True
-    return False
 
 
 class TextSearchStrategy:
@@ -188,7 +143,12 @@ class TextSearchStrategy:
         palavras = licitacao.get("palavras_chave") or []
         modalidade = licitacao.get("modalidade", "")
         uf = licitacao.get("uf", "")
-        termos_ref = _extrair_termos(licitacao.get("objeto") or "")
+
+        # Extrai termos com sinônimos para scoring
+        termos_ref = extrair_termos(licitacao.get("objeto") or "")
+
+        # Categoria da licitação de referência
+        cat_ref = classificar_item(licitacao.get("objeto") or "")
 
         if not palavras:
             return []
@@ -252,6 +212,11 @@ class TextSearchStrategy:
         # Classificar cada resultado
         resultados: list[ResultadoSimilaridade] = []
         for s in similares_raw:
+            # Validar categoria — rejeitar se incompatível
+            cat_similar = classificar_item(s.get("objeto") or "")
+            if cat_ref != cat_similar:
+                continue  # Golden Rule: categorias diferentes não se comparam
+
             hom = s.get("valor_homologado")
             est = s.get("valor_estimado")
 
@@ -275,7 +240,7 @@ class TextSearchStrategy:
             ))
 
         # Filtrar por score mínimo e ordenar
-        resultados = [r for r in resultados if r["score"] >= 20]
+        resultados = [r for r in resultados if r["score"] >= 25]
         resultados.sort(key=lambda r: r["score"], reverse=True)
         return resultados
 
@@ -289,16 +254,19 @@ class TextSearchStrategy:
         uf = licitacao.get("uf", "")
         palavras_chave = licitacao.get("palavras_chave") or []
 
+        # Categoria da licitação de referência
+        cat_ref = classificar_item(objeto)
+
         # Prioriza palavras-chave (mais relevantes) sobre termos do objeto
         if palavras_chave:
-            termos_ref = _extrair_termos(" ".join(palavras_chave[:5]))
+            termos_ref = extrair_termos(" ".join(palavras_chave[:5]))
         else:
-            termos_ref = _extrair_termos(objeto)
+            termos_ref = extrair_termos(objeto)
 
         if not termos_ref:
             return []
 
-        # Usa AND (&) para exigir TODOS os termos — evita matches genéricos
+        # Usa AND (&) para exigir TODOS os termos
         termos_busca = " & ".join(termos_ref[:4])
 
         def _query(filtro_uf: bool):
@@ -352,6 +320,11 @@ class TextSearchStrategy:
         # Classificar cada resultado
         resultados: list[ResultadoSimilaridade] = []
         for item in itens_raw:
+            # Validar categoria — rejeitar se incompatível
+            cat_item = classificar_item(item.get("descricao") or "")
+            if cat_ref != cat_item:
+                continue  # Golden Rule
+
             resultados_item = item.get("resultados_item") or []
             if isinstance(resultados_item, dict):
                 resultados_item = [resultados_item]
@@ -378,20 +351,15 @@ class TextSearchStrategy:
 
             score = _calcular_score_item(item, licitacao, termos_ref)
 
-            # Verificar compatibilidade de unidade
-            unidade_item = item.get("unidade_medida") or ""
-            compativel = True  # Sem unidade de referência na licitação para comparar
-
             resultados.append(ResultadoSimilaridade(
                 registro={**item, "_resultado_usado": resultado_usado},
                 score=score,
                 fonte_preco=fonte,
                 valor=valor,
-                compativel_unidade=compativel,
+                compativel_unidade=True,
             ))
 
         # Filtrar por score mínimo — evita itens sem relação real
-        # (ex: "cessão" de software matchando com "cessão" de cópias)
-        resultados = [r for r in resultados if r["score"] >= 25]
+        resultados = [r for r in resultados if r["score"] >= 30]
         resultados.sort(key=lambda r: r["score"], reverse=True)
         return resultados
