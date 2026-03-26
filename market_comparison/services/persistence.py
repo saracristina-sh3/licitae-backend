@@ -14,6 +14,35 @@ from market_comparison.types import ComparableGroup, PlatformSummary
 log = logging.getLogger(__name__)
 
 
+def humanizar_chave(chave: str, descricao: str, ncm: str | None) -> str:
+    """Converte chave técnica em descrição legível para o frontend."""
+    if chave.startswith("ncm:"):
+        # ncm:84713000:un → "NCM 8471.30 — Computador Desktop — Unidade"
+        partes = chave.split(":")
+        ncm_fmt = partes[1]
+        if len(ncm_fmt) >= 6:
+            ncm_fmt = f"{ncm_fmt[:4]}.{ncm_fmt[4:6]}"
+        unidade = partes[2] if len(partes) > 2 else ""
+        return f"NCM {ncm_fmt} — {descricao} — {unidade.upper()}"
+
+    if chave.startswith("ncm4:"):
+        # ncm4:8471:computador desktop memoria:un
+        partes = chave.split(":")
+        ncm4 = partes[1]
+        palavras = partes[2] if len(partes) > 2 else ""
+        unidade = partes[3] if len(partes) > 3 else ""
+        return f"NCM {ncm4}.xx — {palavras} — {unidade.upper()}"
+
+    if chave.startswith("desc:"):
+        # desc:computador desktop memoria:un
+        partes = chave.split(":")
+        palavras = partes[1] if len(partes) > 1 else ""
+        unidade = partes[2] if len(partes) > 2 else ""
+        return f"{palavras} — {unidade.upper()}"
+
+    return chave
+
+
 def limpar_por_uf(client, uf: str | None) -> None:
     """Remove todos os dados do comparativo para uma UF."""
     if uf:
@@ -76,6 +105,7 @@ def gravar_itens_e_precos(
     item_rows = [{
         "chave_agrupamento": g.chave,
         "descricao": g.descricao,
+        "descricao_agrupamento": humanizar_chave(g.chave, g.descricao, g.ncm),
         "ncm_nbs_codigo": g.ncm,
         "unidade_medida": g.unidade_predominante,
         "menor_preco_plataforma": g.menor_preco_plataforma,

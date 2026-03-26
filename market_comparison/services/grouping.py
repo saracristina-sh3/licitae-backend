@@ -1,11 +1,11 @@
 """
 Serviço de agrupamento — converte itens brutos em grupos comparáveis.
+Usa multi-chave para maximizar cruzamentos entre plataformas.
 """
 
 from __future__ import annotations
 
 import logging
-import statistics
 
 from market_comparison.constants import DESCONTO_MAXIMO
 from market_comparison.services.price_selection import selecionar_preco
@@ -47,22 +47,67 @@ def converter_item_raw(row: dict) -> ObservedItem | None:
 
 def agrupar_itens(itens_raw: list[dict]) -> dict[str, list[ObservedItem]]:
     """
-    Agrupa itens brutos por chave (NCM + unidade ou descrição + unidade).
-    Retorna dict[chave → lista de ObservedItem].
+    Agrupa itens brutos por chave usando multi-chave.
+
+    Cada item pode entrar em até 3 grupos (NCM exato, NCM4, lexical).
+    Depois, deduplicamos: se um grupo NCM exato contém os mesmos itens
+    que um grupo lexical, o lexical é descartado.
     """
     strategy = NcmLexicalStrategy()
     grupos: dict[str, list[ObservedItem]] = {}
 
+    # Fase 1: gerar todas as chaves e agrupar
     for row in itens_raw:
         item = converter_item_raw(row)
         if not item:
             continue
 
-        chave = strategy.gerar_chave(item)
-        if not chave:
+        chaves = strategy.gerar_chaves(item)
+        if not chaves:
             continue
 
-        grupos.setdefault(chave, []).append(item)
+        for chave in chaves:
+            grupos.setdefault(chave, []).append(item)
+
+    # Fase 2: deduplicação — priorizar grupos de maior confiança
+    # Se um item aparece num grupo "ncm:" E num grupo "desc:", e ambos
+    # têm as mesmas plataformas, o grupo "desc:" é redundante.
+    chaves_ncm = {k for k in grupos if k.startswith("ncm:")}
+    chaves_ncm4 = {k for k in grupos if k.startswith("ncm4:")}
+    chaves_desc = {k for k in grupos if k.startswith("desc:")}
+
+    # Para cada grupo desc, verificar se existe grupo ncm/ncm4 com overlap significativo
+    chaves_remover: set[str] = set()
+    for chave_desc in chaves_desc:
+        itens_desc = grupos[chave_desc]
+        plats_desc = {i.plataforma_nome for i in itens_desc}
+
+        for chave_alta in chaves_ncm | chaves_ncm4:
+            itens_alta = grupos[chave_alta]
+            plats_alta = {i.plataforma_nome for i in itens_alta}
+
+            # Se ≥50% das plataformas do grupo desc estão no grupo ncm → redundante
+            overlap = len(plats_desc & plats_alta)
+            if overlap >= len(plats_desc) * 0.5 and len(plats_alta) >= 2:
+                chaves_remover.add(chave_desc)
+                break
+
+    # Também deduplicar ncm4 quando ncm exato existe com overlap
+    for chave_ncm4 in chaves_ncm4:
+        itens_ncm4 = grupos[chave_ncm4]
+        plats_ncm4 = {i.plataforma_nome for i in itens_ncm4}
+
+        for chave_ncm in chaves_ncm:
+            itens_ncm = grupos[chave_ncm]
+            plats_ncm = {i.plataforma_nome for i in itens_ncm}
+
+            overlap = len(plats_ncm4 & plats_ncm)
+            if overlap >= len(plats_ncm4) * 0.5 and len(plats_ncm) >= 2:
+                chaves_remover.add(chave_ncm4)
+                break
+
+    for chave in chaves_remover:
+        del grupos[chave]
 
     return grupos
 
