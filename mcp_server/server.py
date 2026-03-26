@@ -667,7 +667,9 @@ def main() -> None:
     )
 
     if args.transport == "sse":
-        mcp.run(transport="sse", host="0.0.0.0", port=args.port)
+        mcp.settings.host = "0.0.0.0"
+        mcp.settings.port = args.port
+        mcp.run(transport="sse")
     else:
         mcp.run(transport="stdio")
 
