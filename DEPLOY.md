@@ -117,23 +117,6 @@ cd licitacoes-software
 cp .env.example .env
 nano .env
 ```
-
-Preencher:
-```env
-SUPABASE_URL=https://SEU_PROJETO.supabase.co
-SUPABASE_SERVICE_KEY=eyJ...sua-service-role-key
-
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=seu-email@gmail.com
-SMTP_PASS=sua-app-password-do-gmail
-EMAIL_DESTINATARIOS=dest1@email.com,dest2@email.com
-
-DIAS_RETROATIVOS=7
-UFS=MG,RJ
-POPULACAO_MAXIMA=91692
-```
-
 ---
 
 ## Fase 4 — Deploy

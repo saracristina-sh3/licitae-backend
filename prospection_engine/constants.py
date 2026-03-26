@@ -25,11 +25,13 @@ MODALIDADE_NOMES: dict[int, str] = {
 TERMOS_ALTA: list[str] = [
     "permissão de uso", "licença de uso", "cessão de uso",
     "locação de software", "sistema integrado de gestão",
-    "hospedagem de e-mails", "e-mails institucionais",
+    "hospedagem de e-mails", "e-mails institucionais", 
+    "software", "sistema", "sistema de gestão", "e-mail", 
+    "gestão pública"
 ]
 
 TERMOS_MEDIA: list[str] = [
-    "software", "sistema de gestão", "solução tecnológica",
+    "solução tecnológica",
     "email", "e-mail",
 ]
 
