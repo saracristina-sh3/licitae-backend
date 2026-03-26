@@ -36,7 +36,7 @@ def buscar_licitacoes_sem_itens(limite: int, client: Any) -> list[dict]:
         client.table("licitacoes")
         .select(
             "hash_dedup, cnpj_orgao, url_fonte, uf, municipio_nome, "
-            "modalidade, codigo_ibge"
+            "modalidade"
         )
         .neq("cnpj_orgao", "")
         .neq("url_fonte", "")
