@@ -15,30 +15,34 @@ log = logging.getLogger(__name__)
 
 
 def humanizar_chave(chave: str, descricao: str, ncm: str | None) -> str:
-    """Converte chave técnica em descrição legível para o frontend."""
-    if chave.startswith("ncm:"):
-        # ncm:84713000:un → "NCM 8471.30 — Computador Desktop — Unidade"
-        partes = chave.split(":")
+    """Converte chave técnica em descrição legível para o frontend.
+
+    Formato das chaves: tipo:valor:unidade:fonte (hom/est)
+    """
+    partes = chave.split(":")
+    # Última parte é a fonte (hom/est)
+    fonte_label = ""
+    if partes and partes[-1] in ("hom", "est"):
+        fonte_label = " [Homologado]" if partes[-1] == "hom" else " [Estimado]"
+        partes = partes[:-1]  # Remove fonte para parsear o resto
+
+    if chave.startswith("ncm:") and len(partes) >= 3:
         ncm_fmt = partes[1]
         if len(ncm_fmt) >= 6:
             ncm_fmt = f"{ncm_fmt[:4]}.{ncm_fmt[4:6]}"
-        unidade = partes[2] if len(partes) > 2 else ""
-        return f"NCM {ncm_fmt} — {descricao} — {unidade.upper()}"
+        unidade = partes[2]
+        return f"NCM {ncm_fmt} — {descricao} — {unidade.upper()}{fonte_label}"
 
-    if chave.startswith("ncm4:"):
-        # ncm4:8471:computador desktop memoria:un
-        partes = chave.split(":")
+    if chave.startswith("ncm4:") and len(partes) >= 4:
         ncm4 = partes[1]
-        palavras = partes[2] if len(partes) > 2 else ""
-        unidade = partes[3] if len(partes) > 3 else ""
-        return f"NCM {ncm4}.xx — {palavras} — {unidade.upper()}"
+        palavras = partes[2]
+        unidade = partes[3]
+        return f"NCM {ncm4}.xx — {palavras} — {unidade.upper()}{fonte_label}"
 
-    if chave.startswith("desc:"):
-        # desc:computador desktop memoria:un
-        partes = chave.split(":")
-        palavras = partes[1] if len(partes) > 1 else ""
-        unidade = partes[2] if len(partes) > 2 else ""
-        return f"{palavras} — {unidade.upper()}"
+    if chave.startswith("desc:") and len(partes) >= 3:
+        palavras = partes[1]
+        unidade = partes[2]
+        return f"{palavras} — {unidade.upper()}{fonte_label}"
 
     return chave
 
