@@ -91,13 +91,22 @@ def processar_licitacao(client, licitacao: dict) -> dict | None:
         log.debug("[%s] Sem similares encontrados (%.1fs)", lic_id[:8], time.time() - t0)
         return None
 
-    # ── 2. Separar por fonte (licitações) ──
+    # ── 2. Filtrar por escala comparável ──
+    # Se a licitação tem valor estimado, descarta similares com >20x de diferença
+    valor_ref = float(licitacao.get("valor_estimado") or 0)
+    if valor_ref > 0:
+        similares_lic = [
+            s for s in similares_lic
+            if s["valor"] > 0 and (valor_ref / 20) <= s["valor"] <= (valor_ref * 20)
+        ]
+
+    # ── 3. Separar por fonte (licitações) ──
 
     valores_todos = [s["valor"] for s in similares_lic if s["valor"] > 0]
     valores_hom = [s["valor"] for s in similares_lic if s["fonte_preco"] == "homologado" and s["valor"] > 0]
     valores_est = [s["valor"] for s in similares_lic if s["fonte_preco"] == "estimado" and s["valor"] > 0]
 
-    # ── 3. Remover outliers e calcular estatísticas ──
+    # ── 4. Remover outliers e calcular estatísticas ──
 
     valores_limpos = remover_outliers_iqr(valores_todos)
     resumo_geral = calcular_resumo(valores_limpos)
@@ -112,7 +121,17 @@ def processar_licitacao(client, licitacao: dict) -> dict | None:
     else:
         fonte_predominante = "misto"
 
-    # ── 4. Itens similares ──
+    # ── 5. Itens similares — filtrar escala ──
+
+    # Filtra itens com escala incompatível (>20x diferença entre max e min)
+    valores_itens_raw = [s["valor"] for s in similares_itens if s["valor"] > 0]
+    if len(valores_itens_raw) >= 2:
+        med = sorted(valores_itens_raw)[len(valores_itens_raw) // 2]
+        if med > 0:
+            similares_itens = [
+                s for s in similares_itens
+                if s["valor"] > 0 and (med / 20) <= s["valor"] <= (med * 20)
+            ]
 
     valores_itens = [s["valor"] for s in similares_itens if s["valor"] > 0]
     itens_limpos = remover_outliers_iqr(valores_itens)

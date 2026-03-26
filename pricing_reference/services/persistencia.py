@@ -168,7 +168,7 @@ def buscar_licitacoes_pendentes(client, limite: int) -> list[dict]:
     """Busca licitações abertas sem preço calculado."""
     result = (
         client.table("licitacoes")
-        .select("id, objeto, modalidade, uf, palavras_chave")
+        .select("id, objeto, modalidade, uf, palavras_chave, valor_estimado")
         .eq("proposta_aberta", True)
         .order("relevancia", desc=False)
         .order("data_publicacao", desc=True)

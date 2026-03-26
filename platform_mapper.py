@@ -16,7 +16,9 @@ CONCORRENTES_DIRETAS = [
     {"id_usuario": 13, "nome": "Licitar Digital", "tipo": "concorrente_direta"},
     {"id_usuario": 18, "nome": "Licitanet Licitações Eletrônicas LTDA", "tipo": "concorrente_direta"},
     {"id_usuario": 3, "nome": "Compras.gov.br", "tipo": "plataforma_licitacao"},
-    # AMM — a localizar idUsuario
+    {"id_usuario": 5, "nome": "ECustomize Consultoria em Software S.A", "tipo": "plataforma_licitacao"},
+    {"id_usuario": 90, "nome": "Novo BBMNET Licitações", "tipo": "plataforma_licitacao"},
+
 ]
 
 # IDs das concorrentes diretas (para filtros rápidos)
@@ -24,7 +26,6 @@ IDS_CONCORRENTES = {p["id_usuario"] for p in CONCORRENTES_DIRETAS}
 
 # Demais plataformas mapeadas (referência, não concorrentes diretas)
 DEMAIS_PLATAFORMAS = [
-    {"id_usuario": 5, "nome": "ECustomize Consultoria em Software S.A", "tipo": "plataforma_licitacao"},
     {"id_usuario": 10, "nome": "Portal de Compras do Estado de Minas Gerais", "tipo": "portal_estadual"},
     {"id_usuario": 14, "nome": "Portal de Compras Públicas do Estado do Rio de Janeiro", "tipo": "portal_estadual"},
     {"id_usuario": 16, "nome": "Compras Pará", "tipo": "portal_estadual"},
@@ -48,7 +49,6 @@ DEMAIS_PLATAFORMAS = [
     {"id_usuario": 85, "nome": "Grupo Assessor", "tipo": "sistema_gestao"},
     {"id_usuario": 88, "nome": "M2A Tecnologia", "tipo": "sistema_gestao"},
     {"id_usuario": 89, "nome": "Licita + Brasil", "tipo": "plataforma_licitacao"},
-    {"id_usuario": 90, "nome": "Novo BBMNET Licitações", "tipo": "plataforma_licitacao"},
     {"id_usuario": 91, "nome": "SEAP Paraná", "tipo": "portal_estadual"},
     {"id_usuario": 94, "nome": "Sigep - Sistemas Integrados", "tipo": "sistema_gestao"},
     {"id_usuario": 96, "nome": "BR Conectado", "tipo": "plataforma_licitacao"},

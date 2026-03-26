@@ -19,6 +19,9 @@ CONCORRENTES: dict[int, str] = {
     13: "Licitar Digital",
     18: "Licitanet",
     3: "Compras.gov.br",
+    5: "ECustomize",
+    90: "BBNet",
+
 }
 
 # Permite adicionar via env (ex: PLATAFORMAS_COMPARATIVO=121,12,13,18,999)
