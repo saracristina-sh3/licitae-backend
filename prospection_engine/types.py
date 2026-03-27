@@ -28,7 +28,7 @@ class BuscaConfig:
     termos_me_epp: list[str] = field(default_factory=lambda: list(TERMOS_ME_EPP))
     termos_exclusao: list[str] = field(default_factory=list)
     janela_dias: int = field(default_factory=lambda: getattr(Config, "JANELA_DIAS", 1))
-    max_workers: int = field(default_factory=lambda: getattr(Config, "MAX_WORKERS", 8))
+    max_workers: int = field(default_factory=lambda: getattr(Config, "MAX_WORKERS", 3))
 
     @classmethod
     def from_dict(cls, d: dict) -> BuscaConfig:

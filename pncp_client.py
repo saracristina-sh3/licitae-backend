@@ -22,11 +22,12 @@ class PNCPClient:
                 "User-Agent": "LicitacoesSoftware/1.0",
             }
         )
-        # Retry automático em timeout e 5xx
+        # Retry automático em timeout, 5xx e 429 (rate limit)
         retries = Retry(
-            total=3,
-            backoff_factor=2,
-            status_forcelist=[500, 502, 503, 504],
+            total=5,
+            backoff_factor=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            respect_retry_after_header=True,
         )
         self.session.mount("https://", HTTPAdapter(max_retries=retries))
 
@@ -75,7 +76,7 @@ class PNCPClient:
         modalidade: int,
         uf: str | None = None,
         codigo_municipio: str | None = None,
-        delay: float = 0.3,
+        delay: float = 0.5,
     ) -> list[dict]:
         """Busca todas as páginas de resultados."""
         todos = []
