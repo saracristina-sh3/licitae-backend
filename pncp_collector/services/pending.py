@@ -98,10 +98,13 @@ def buscar_itens_sem_resultado(limite: int, client: Any) -> list[dict]:
     except Exception:
         log.debug("RPC itens_sem_resultado indisponível, usando fallback")
 
+    # Busca TODOS os itens (não só tem_resultado=True)
+    # Muitos processos finalizam depois da coleta inicial
     result = (
         client.table("itens_contratacao")
         .select("id, cnpj_orgao, ano_compra, sequencial_compra, numero_item")
-        .eq("tem_resultado", True)
+        .gt("valor_unitario_estimado", 0)
+        .order("created_at", desc=True)
         .limit(limite * 3)
         .execute()
     )
