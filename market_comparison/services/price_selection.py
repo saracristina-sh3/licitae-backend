@@ -63,7 +63,8 @@ def selecionar_preco(
         desconto = _calcular_desconto(est, melhor_hom)
         return melhor_hom, "homologado", desconto
 
-    # Sem homologado = não entra no comparativo
-    # O comparativo compara resultados reais de processos finalizados,
-    # não estimativas. Estimado é teto antes da disputa, não preço de mercado.
+    # Fallback: estimado (melhor que nada enquanto não tem homologados suficientes)
+    if est > 0:
+        return est, "estimado", None
+
     return 0.0, "estimado", None
