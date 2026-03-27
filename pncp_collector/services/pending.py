@@ -110,11 +110,17 @@ def buscar_itens_sem_resultado(limite: int, client: Any) -> list[dict]:
         return []
 
     ids = [i["id"] for i in itens]
-    ja_coletados_res = (
-        client.table("resultados_item")
-        .select("item_id")
-        .in_("item_id", ids)
-        .execute()
-    )
-    ids_com_resultado = {r["item_id"] for r in (ja_coletados_res.data or [])}
+
+    # Busca em lotes de 100 para não estourar URL
+    ids_com_resultado: set[str] = set()
+    for i in range(0, len(ids), 100):
+        batch = ids[i:i + 100]
+        ja = (
+            client.table("resultados_item")
+            .select("item_id")
+            .in_("item_id", batch)
+            .execute()
+        )
+        ids_com_resultado.update(r["item_id"] for r in (ja.data or []))
+
     return [i for i in itens if i["id"] not in ids_com_resultado][:limite]
