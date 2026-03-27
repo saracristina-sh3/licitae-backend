@@ -37,9 +37,8 @@ def preparar_contexto(client, licitacao_id: str) -> dict:
     edital = (
         client.table("analise_editais")
         .select(
-            "documentos_exigidos, requisitos_tecnicos, clausulas_risco, "
-            "qualificacao, prazos, documentos_estruturados, "
-            "requisitos_estruturados, riscos_estruturados, "
+            "documentos_estruturados, requisitos_estruturados, "
+            "riscos_estruturados, qualificacao_estruturada, "
             "prazos_classificados, score_risco, score_confianca, "
             "texto_extraido"
         )
