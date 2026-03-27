@@ -31,7 +31,7 @@ _CUSTOS = {
 
 # Modelos padrão por provider
 _MODELO_ANTHROPIC = "claude-sonnet-4-5-20250514"
-_MODELO_GEMINI = "gemini-2.0-flash"
+_MODELO_GEMINI = "gemini-2.0-flash-lite"
 
 
 def _estimar_custo(modelo: str, tokens_in: int, tokens_out: int) -> float:
