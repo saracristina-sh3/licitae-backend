@@ -18,25 +18,23 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 
-PROMPT_SINONIMOS = """Você é um especialista em licitações públicas brasileiras.
-
-Analise as descrições de itens de licitação abaixo e gere um dicionário de sinônimos
-para normalização. O objetivo é agrupar itens que são o mesmo produto/serviço mas
-descritos de formas diferentes.
-
-REGRAS:
-1. Retorne APENAS um JSON válido, sem markdown
-2. Formato: {"variação": "termo_canônico", ...}
-3. O termo canônico deve ser o mais curto e comum
-4. Agrupe: singular/plural, abreviações, variações regionais
-5. NÃO inclua preposições, artigos ou stopwords
-6. Foque em termos técnicos de TI, medicamentos, materiais, serviços
-7. Mínimo 50 sinônimos, máximo 200
-
-DESCRIÇÕES (amostra do banco):
-{descricoes}
-
-Retorne o JSON de sinônimos:"""
+PROMPT_TEMPLATE = (
+    "Você é um especialista em licitações públicas brasileiras.\n\n"
+    "Analise as descrições de itens de licitação abaixo e gere um dicionário de sinônimos "
+    "para normalização. O objetivo é agrupar itens que são o mesmo produto/serviço mas "
+    "descritos de formas diferentes.\n\n"
+    "REGRAS:\n"
+    '1. Retorne APENAS um JSON válido, sem markdown\n'
+    '2. Formato: {"variacao": "termo_canonico", ...}\n'
+    "3. O termo canônico deve ser o mais curto e comum\n"
+    "4. Agrupe: singular/plural, abreviações, variações regionais\n"
+    "5. NÃO inclua preposições, artigos ou stopwords\n"
+    "6. Foque em termos técnicos de TI, medicamentos, materiais, serviços\n"
+    "7. Mínimo 50 sinônimos, máximo 200\n\n"
+    "DESCRIÇÕES (amostra do banco):\n"
+    "{descricoes}\n\n"
+    "Retorne o JSON de sinônimos:"
+)
 
 
 def extrair_descricoes_unicas(client, limite: int = 1000) -> list[str]:
@@ -76,7 +74,7 @@ def chamar_ia(descricoes: list[str]) -> dict:
 def _chamar_anthropic(api_key: str, descricoes: list[str]) -> dict:
     import anthropic
 
-    prompt = PROMPT_SINONIMOS.format(descricoes="\n".join(f"- {d}" for d in descricoes))
+    prompt = PROMPT_TEMPLATE.format(descricoes="\n".join(f"- {d}" for d in descricoes))
 
     claude = anthropic.Anthropic(api_key=api_key)
     response = claude.messages.create(
@@ -104,7 +102,7 @@ def _chamar_anthropic(api_key: str, descricoes: list[str]) -> dict:
 def _chamar_gemini(api_key: str, descricoes: list[str]) -> dict:
     from google import genai
 
-    prompt = PROMPT_SINONIMOS.format(descricoes="\n".join(f"- {d}" for d in descricoes))
+    prompt = PROMPT_TEMPLATE.format(descricoes="\n".join(f"- {d}" for d in descricoes))
 
     gemini = genai.Client(api_key=api_key)
     response = gemini.models.generate_content(
