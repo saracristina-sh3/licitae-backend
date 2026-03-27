@@ -94,18 +94,31 @@ def _chamar_anthropic(api_key: str, modelo: str, prompt: str) -> tuple[str, int,
 
 
 def _chamar_gemini(api_key: str, modelo: str, prompt: str) -> tuple[str, int, int]:
-    """Chama Gemini API. Retorna (texto, tokens_in, tokens_out)."""
+    """Chama Gemini API com retry para 429. Retorna (texto, tokens_in, tokens_out)."""
     from google import genai
 
     gemini = genai.Client(api_key=api_key)
-    response = gemini.models.generate_content(
-        model=modelo,
-        contents=f"{SYSTEM_PROMPT}\n\n{prompt}",
-        config={
-            "max_output_tokens": MAX_TOKENS_RESPOSTA,
-            "temperature": 0.2,
-        },
-    )
+
+    # Retry com backoff para rate limiting (429)
+    max_tentativas = 4
+    for tentativa in range(max_tentativas):
+        try:
+            response = gemini.models.generate_content(
+                model=modelo,
+                contents=f"{SYSTEM_PROMPT}\n\n{prompt}",
+                config={
+                    "max_output_tokens": MAX_TOKENS_RESPOSTA,
+                    "temperature": 0.2,
+                },
+            )
+            break  # Sucesso
+        except Exception as e:
+            if "429" in str(e) and tentativa < max_tentativas - 1:
+                espera = (tentativa + 1) * 30  # 30s, 60s, 90s
+                log.warning("Gemini 429 — aguardando %ds (tentativa %d/%d)", espera, tentativa + 1, max_tentativas)
+                time.sleep(espera)
+            else:
+                raise
 
     texto = response.text or ""
     tokens_in = 0
