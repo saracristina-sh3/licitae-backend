@@ -1,4 +1,6 @@
 """Verifica distribuição de homologados por plataforma."""
+import sys
+sys.path.insert(0, "/app")
 from db import get_client
 from collections import Counter
 
