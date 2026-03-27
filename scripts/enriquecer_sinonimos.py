@@ -24,19 +24,26 @@ SYSTEM_PROMPT = (
     "um dicionário de sinônimos para normalização de texto."
 )
 
-USER_PROMPT_PREFIX = """Analise as descrições de itens de licitação abaixo e gere um dicionário de sinônimos para normalização. O objetivo é agrupar itens que são o mesmo produto/serviço mas descritos de formas diferentes entre plataformas.
+USER_PROMPT_PREFIX = """Analise as descrições de itens de licitação abaixo e gere um dicionário de sinônimos SEMÂNTICOS para normalização. O objetivo é agrupar itens que são o MESMO PRODUTO/SERVIÇO mas descritos com PALAVRAS DIFERENTES entre plataformas de licitação.
+
+NÃO QUERO plural/singular (isso já é tratado). Quero sinônimos SEMÂNTICOS como:
+- "notebook" e "computador portatil" são o mesmo produto
+- "toner" e "cartucho de impressao" são o mesmo produto
+- "manutencao" e "reparo" são o mesmo serviço
+- "gasolina" e "combustivel automotivo" são o mesmo produto
+- "seringa" e "dispositivo de injecao" são o mesmo produto
 
 REGRAS:
 1. Retorne APENAS um JSON válido, sem markdown, sem explicação
-2. Cada entrada mapeia uma variação para o termo canônico (mais curto e comum)
-3. Agrupe: singular/plural, abreviações, variações regionais, erros de digitação
-4. NÃO inclua preposições, artigos ou stopwords
-5. Foque em termos técnicos de TI, saúde, materiais, serviços, alimentos
-6. Mínimo 80 sinônimos, máximo 300
-7. Use apenas letras minúsculas sem acentos nos termos
+2. Formato: a variação mapeia para o termo canônico mais comum
+3. IGNORE plural/singular — foque em termos que significam a mesma coisa mas usam palavras diferentes
+4. Foque nas categorias: TI, saúde/medicamentos, materiais de escritório, veículos, alimentos, construção, limpeza
+5. Mínimo 100 sinônimos semânticos
+6. Use apenas letras minúsculas sem acentos
+7. Cada termo deve ter no máximo 2 palavras
 
-Exemplo de formato esperado:
-{"notebooks": "computador", "microcomputador": "computador", "impressoras": "impressora"}
+Exemplo:
+{"portatil": "notebook", "micro": "computador", "tonner": "toner", "reparo": "manutencao", "conserto": "manutencao", "gasoleo": "diesel", "etilico": "alcool"}
 
 DESCRIÇÕES (amostra do banco):
 """
