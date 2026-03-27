@@ -61,7 +61,7 @@ def extrair_descricoes_unicas(client, limite: int = 1000) -> list[str]:
             palavras = desc.split()[:6]
             descricoes.add(" ".join(palavras).lower())
 
-    return sorted(descricoes)[:500]
+    return sorted(descricoes)[:300]
 
 
 def montar_prompt(descricoes: list[str]) -> str:
@@ -91,7 +91,7 @@ def _chamar_anthropic(api_key: str, descricoes: list[str]) -> dict:
     claude = anthropic.Anthropic(api_key=api_key)
     response = claude.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=4096,
+        max_tokens=8192,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -111,7 +111,20 @@ def _chamar_anthropic(api_key: str, descricoes: list[str]) -> dict:
         custo,
     )
 
-    return json.loads(texto)
+    # Se JSON truncado, tenta reparar fechando a chave
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError:
+        # Encontra a última entrada completa ("key": "value")
+        ultimo_fecha = texto.rfind('"')
+        if ultimo_fecha > 0:
+            # Volta até encontrar uma entrada completa
+            trecho = texto[:ultimo_fecha + 1]
+            # Remove trailing comma se houver
+            trecho = trecho.rstrip().rstrip(",")
+            trecho += "}"
+            log.warning("JSON truncado — reparado cortando no último par completo")
+            return json.loads(trecho)
 
 
 def _chamar_gemini(api_key: str, descricoes: list[str]) -> dict:
