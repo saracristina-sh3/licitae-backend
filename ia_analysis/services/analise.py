@@ -30,7 +30,7 @@ _CUSTOS = {
 }
 
 # Modelos padrão por provider
-_MODELO_ANTHROPIC = "claude-sonnet-4-5-20250514"
+_MODELO_ANTHROPIC = "claude-sonnet-4-20250514"
 _MODELO_GEMINI = "gemini-2.0-flash-lite"
 
 
