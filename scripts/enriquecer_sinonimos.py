@@ -18,23 +18,28 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 
-PROMPT_TEMPLATE = (
-    "Você é um especialista em licitações públicas brasileiras.\n\n"
-    "Analise as descrições de itens de licitação abaixo e gere um dicionário de sinônimos "
-    "para normalização. O objetivo é agrupar itens que são o mesmo produto/serviço mas "
-    "descritos de formas diferentes.\n\n"
-    "REGRAS:\n"
-    '1. Retorne APENAS um JSON válido, sem markdown\n'
-    '2. Formato: {"variacao": "termo_canonico", ...}\n'
-    "3. O termo canônico deve ser o mais curto e comum\n"
-    "4. Agrupe: singular/plural, abreviações, variações regionais\n"
-    "5. NÃO inclua preposições, artigos ou stopwords\n"
-    "6. Foque em termos técnicos de TI, medicamentos, materiais, serviços\n"
-    "7. Mínimo 50 sinônimos, máximo 200\n\n"
-    "DESCRIÇÕES (amostra do banco):\n"
-    "{descricoes}\n\n"
-    "Retorne o JSON de sinônimos:"
+SYSTEM_PROMPT = (
+    "Você é um especialista em licitações públicas brasileiras. "
+    "Sua tarefa é analisar descrições de itens de licitação e gerar "
+    "um dicionário de sinônimos para normalização de texto."
 )
+
+USER_PROMPT_PREFIX = """Analise as descrições de itens de licitação abaixo e gere um dicionário de sinônimos para normalização. O objetivo é agrupar itens que são o mesmo produto/serviço mas descritos de formas diferentes entre plataformas.
+
+REGRAS:
+1. Retorne APENAS um JSON válido, sem markdown, sem explicação
+2. Cada entrada mapeia uma variação para o termo canônico (mais curto e comum)
+3. Agrupe: singular/plural, abreviações, variações regionais, erros de digitação
+4. NÃO inclua preposições, artigos ou stopwords
+5. Foque em termos técnicos de TI, saúde, materiais, serviços, alimentos
+6. Mínimo 80 sinônimos, máximo 300
+7. Use apenas letras minúsculas sem acentos nos termos
+
+Exemplo de formato esperado:
+{"notebooks": "computador", "microcomputador": "computador", "impressoras": "impressora"}
+
+DESCRIÇÕES (amostra do banco):
+"""
 
 
 def extrair_descricoes_unicas(client, limite: int = 1000) -> list[str]:
@@ -44,6 +49,7 @@ def extrair_descricoes_unicas(client, limite: int = 1000) -> list[str]:
         .select("descricao")
         .gt("valor_unitario_estimado", 0)
         .not_.is_("descricao", "null")
+        .order("created_at", desc=True)
         .limit(limite)
         .execute()
     )
@@ -52,48 +58,57 @@ def extrair_descricoes_unicas(client, limite: int = 1000) -> list[str]:
     for row in (result.data or []):
         desc = (row.get("descricao") or "").strip()
         if len(desc) > 5:
-            # Pega só as primeiras 5 palavras (para reduzir tokens)
-            palavras = desc.split()[:5]
+            palavras = desc.split()[:6]
             descricoes.add(" ".join(palavras).lower())
 
-    return sorted(descricoes)[:500]  # Max 500 para caber no contexto
+    return sorted(descricoes)[:500]
+
+
+def montar_prompt(descricoes: list[str]) -> str:
+    """Monta o prompt completo com as descrições."""
+    lista = "\n".join("- " + d for d in descricoes)
+    return USER_PROMPT_PREFIX + lista + "\n\nRetorne o JSON de sinônimos:"
 
 
 def chamar_ia(descricoes: list[str]) -> dict:
-    """Chama Claude para gerar sinônimos."""
+    """Chama a IA disponível para gerar sinônimos."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if api_key:
-            return _chamar_gemini(api_key, descricoes)
-        raise RuntimeError("Nenhuma API key configurada")
+    if api_key:
+        return _chamar_anthropic(api_key, descricoes)
 
-    return _chamar_anthropic(api_key, descricoes)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        return _chamar_gemini(api_key, descricoes)
+
+    raise RuntimeError("Nenhuma API key configurada (ANTHROPIC_API_KEY ou GEMINI_API_KEY)")
 
 
 def _chamar_anthropic(api_key: str, descricoes: list[str]) -> dict:
     import anthropic
 
-    prompt = PROMPT_TEMPLATE.format(descricoes="\n".join(f"- {d}" for d in descricoes))
+    prompt = montar_prompt(descricoes)
 
     claude = anthropic.Anthropic(api_key=api_key)
     response = claude.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=4096,
+        system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
 
     texto = response.content[0].text.strip()
+    # Remove markdown se presente
     if texto.startswith("```"):
         linhas = texto.split("\n")
         linhas = [l for l in linhas if not l.strip().startswith("```")]
         texto = "\n".join(linhas)
 
+    custo = (response.usage.input_tokens * 3 + response.usage.output_tokens * 15) / 1_000_000
     log.info(
         "Claude: %d input + %d output tokens | $%.4f",
         response.usage.input_tokens,
         response.usage.output_tokens,
-        (response.usage.input_tokens * 3 + response.usage.output_tokens * 15) / 1_000_000,
+        custo,
     )
 
     return json.loads(texto)
@@ -101,15 +116,27 @@ def _chamar_anthropic(api_key: str, descricoes: list[str]) -> dict:
 
 def _chamar_gemini(api_key: str, descricoes: list[str]) -> dict:
     from google import genai
+    import time
 
-    prompt = PROMPT_TEMPLATE.format(descricoes="\n".join(f"- {d}" for d in descricoes))
+    prompt = SYSTEM_PROMPT + "\n\n" + montar_prompt(descricoes)
 
     gemini = genai.Client(api_key=api_key)
-    response = gemini.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-        config={"max_output_tokens": 4096, "temperature": 0.2},
-    )
+
+    for tentativa in range(4):
+        try:
+            response = gemini.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config={"max_output_tokens": 4096, "temperature": 0.2},
+            )
+            break
+        except Exception as e:
+            if "429" in str(e) and tentativa < 3:
+                espera = (tentativa + 1) * 30
+                log.warning("Gemini 429 — aguardando %ds", espera)
+                time.sleep(espera)
+            else:
+                raise
 
     texto = (response.text or "").strip()
     if texto.startswith("```"):
@@ -165,12 +192,12 @@ def main():
         json.dump(merged, f, ensure_ascii=False, indent=2, sort_keys=True)
 
     log.info("Sinônimos salvos em %s", output)
-    log.info("Revise o arquivo e copie para comparison_core/constants.py")
+    log.info("Revise e copie para comparison_core/constants.py")
 
-    # Mostra os novos (para review rápido)
+    # Mostra os novos
     novos_adicionados = {k: v for k, v in merged.items() if k not in SINONIMOS}
     if novos_adicionados:
-        log.info("\n=== NOVOS SINÔNIMOS ===")
+        log.info("\n=== %d NOVOS SINÔNIMOS ===", len(novos_adicionados))
         for k, v in sorted(novos_adicionados.items()):
             print(f'    "{k}": "{v}",')
 
