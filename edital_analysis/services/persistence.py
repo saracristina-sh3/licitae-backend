@@ -68,7 +68,6 @@ def gravar_analise(client, resultado: ResultadoAnalise) -> dict | None:
         # Arquivo
         "arquivo_escolhido": resultado.arquivo.titulo if resultado.arquivo else None,
         "score_arquivo": resultado.arquivo.score if resultado.arquivo else None,
-        "motivo_arquivo": ", ".join(resultado.arquivo.motivos[:3]) if resultado.arquivo else None,
         # Qualidade
         "qualidade_extracao": resultado.qualidade_extracao.score if resultado.qualidade_extracao else None,
         "faixa_qualidade": resultado.qualidade_extracao.faixa if resultado.qualidade_extracao else None,
