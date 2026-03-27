@@ -55,12 +55,6 @@ def gravar_analise(client, resultado: ResultadoAnalise) -> dict | None:
     """
     registro = {
         "licitacao_id": resultado.licitacao_id,
-        # Campos legados (text[]) — compat. frontend v1
-        "documentos_exigidos": [a.trecho for a in resultado.documentos],
-        "requisitos_tecnicos": [a.trecho for a in resultado.requisitos],
-        "clausulas_risco": [a.trecho for a in resultado.riscos],
-        "qualificacao": [a.trecho for a in resultado.qualificacao],
-        "prazos": [{"valor": p.valor, "unidade": p.unidade, "contexto": p.contexto} for p in resultado.prazos],
         # Metadados
         "url_documento": resultado.url_documento,
         "paginas": resultado.paginas,
