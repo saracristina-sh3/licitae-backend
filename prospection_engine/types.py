@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import TypedDict
 
 from config import Config
@@ -33,7 +33,8 @@ class BuscaConfig:
     @classmethod
     def from_dict(cls, d: dict) -> BuscaConfig:
         """Cria uma BuscaConfig a partir de um dict, ignorando valores None."""
-        campos_validos = {k: v for k, v in d.items() if v is not None and hasattr(cls, k)}
+        nomes_campos = {f.name for f in fields(cls)}
+        campos_validos = {k: v for k, v in d.items() if v is not None and k in nomes_campos}
         return cls(**campos_validos)
 
 
