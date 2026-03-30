@@ -43,6 +43,7 @@ def unificar_configs(configs: list[dict]) -> dict:
     """
     Combina todas as configs de usuários em uma única config de busca.
     Usa a união de todos os termos/UFs para buscar tudo de uma vez.
+    Integra termos de exclusão e domínios da org quando disponíveis.
     """
     ufs = set()
     palavras_chave = set()
@@ -63,6 +64,19 @@ def unificar_configs(configs: list[dict]) -> dict:
         termos_me_epp.update(c.get("termos_me_epp", []))
         fpm_maximo = max(fpm_maximo, c.get("fpm_maximo", 2.8))
 
+    # Carrega termos de exclusão de todas as orgs (união)
+    termos_exclusao = set()
+    exclusoes_por_org = carregar_termos_exclusao()
+    for termos in exclusoes_por_org.values():
+        termos_exclusao.update(termos)
+
+    # Carrega domínios da org — modalidades da org prevalecem sobre user_config
+    dominios_por_org = carregar_dominios_org()
+    for org_dominios in dominios_por_org.values():
+        org_modalidades = org_dominios.get("modalidade_contratacao", [])
+        if org_modalidades:
+            modalidades.update(org_modalidades)
+
     return {
         "ufs": sorted(ufs),
         "palavras_chave": sorted(palavras_chave),
@@ -71,6 +85,7 @@ def unificar_configs(configs: list[dict]) -> dict:
         "termos_alta": sorted(termos_alta),
         "termos_media": sorted(termos_media),
         "termos_me_epp": sorted(termos_me_epp),
+        "termos_exclusao": sorted(termos_exclusao),
         "fpm_maximo": fpm_maximo,
     }
 
