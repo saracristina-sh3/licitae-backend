@@ -139,6 +139,9 @@ def inserir_licitacoes(resultados: list[dict]) -> dict:
             "modalidade_id": r.get("modalidade_id"),
             "modo_disputa_id": r.get("modo_disputa_id"),
             "situacao_compra_id": r.get("situacao_compra_id"),
+            "score": r.get("score"),
+            "urgencia": r.get("urgencia"),
+            "informacao_complementar": r.get("informacao_complementar"),
         }
 
         try:
