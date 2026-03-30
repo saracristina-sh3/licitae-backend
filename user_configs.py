@@ -113,6 +113,30 @@ def carregar_termos_exclusao() -> dict[str, list[str]]:
         return {}
 
 
+def carregar_dominios_org() -> dict[str, dict[str, list[int]]]:
+    """
+    Carrega configurações de domínios PNCP de todas as organizações.
+    Retorna dict org_id -> { dominio -> [codigos_ativos] }.
+    """
+    if not _supabase_disponivel():
+        return {}
+
+    try:
+        from db import get_client
+        client = get_client()
+        result = client.table("org_dominios_config").select("org_id, dominio, codigos_ativos").execute()
+        rows = result.data or []
+
+        configs: dict[str, dict[str, list[int]]] = {}
+        for row in rows:
+            oid = row["org_id"]
+            configs.setdefault(oid, {})[row["dominio"]] = row["codigos_ativos"] or []
+        return configs
+    except Exception as e:
+        log.error("Erro ao carregar domínios da org: %s", e)
+        return {}
+
+
 def _normalizar_config(c: dict) -> dict:
     """Garante que todos os campos existem."""
     padrao = _config_padrao()

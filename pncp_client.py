@@ -38,6 +38,7 @@ class PNCPClient:
         modalidade: int,
         uf: str | None = None,
         codigo_municipio: str | None = None,
+        modo_disputa: int | None = None,
         pagina: int = 1,
         tamanho: int = 50,
     ) -> dict:
@@ -53,6 +54,8 @@ class PNCPClient:
             params["uf"] = uf
         if codigo_municipio:
             params["codigoMunicipioIbge"] = codigo_municipio
+        if modo_disputa:
+            params["codigoModoDisputa"] = modo_disputa
 
         url = f"{self.base_url}/v1/contratacoes/publicacao"
 
@@ -76,6 +79,7 @@ class PNCPClient:
         modalidade: int,
         uf: str | None = None,
         codigo_municipio: str | None = None,
+        modo_disputa: int | None = None,
         delay: float = 0.5,
     ) -> list[dict]:
         """Busca todas as páginas de resultados."""
@@ -89,6 +93,7 @@ class PNCPClient:
                 modalidade=modalidade,
                 uf=uf,
                 codigo_municipio=codigo_municipio,
+                modo_disputa=modo_disputa,
                 pagina=pagina,
             )
 
