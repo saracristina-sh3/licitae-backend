@@ -1,6 +1,6 @@
 """
-Carrega configurações dos usuários do Supabase para uso pelo scraper.
-Quando não há usuários configurados, usa os defaults do .env.
+Carrega configurações das organizações do Supabase para uso pelo scraper.
+Fonte única: org_config + org_dominios_config.
 """
 
 import logging
@@ -15,11 +15,10 @@ def _supabase_disponivel() -> bool:
     return bool(os.environ.get("SUPABASE_URL")) and bool(os.environ.get("SUPABASE_SERVICE_KEY"))
 
 
-def carregar_configs_usuarios() -> list[dict]:
+def carregar_configs_org() -> list[dict]:
     """
-    Carrega todas as configurações de usuários do Supabase.
-    Retorna lista de dicts com: ufs, fpm_maximo, palavras_chave, modalidades,
-    fontes, termos_alta, termos_media, termos_me_epp.
+    Carrega todas as configurações de organizações (org_config).
+    Retorna lista de dicts normalizados para o scraper.
     """
     if not _supabase_disponivel():
         return [_config_padrao()]
@@ -27,7 +26,7 @@ def carregar_configs_usuarios() -> list[dict]:
     try:
         from db import get_client
         client = get_client()
-        result = client.table("user_config").select("*").execute()
+        result = client.table("org_config").select("*").execute()
         configs = result.data or []
 
         if not configs:
@@ -35,15 +34,14 @@ def carregar_configs_usuarios() -> list[dict]:
 
         return [_normalizar_config(c) for c in configs]
     except Exception as e:
-        log.error("Erro ao carregar configs de usuários: %s", e)
+        log.error("Erro ao carregar org_configs: %s", e)
         return [_config_padrao()]
 
 
 def unificar_configs(configs: list[dict]) -> dict:
     """
-    Combina todas as configs de usuários em uma única config de busca.
-    Usa a união de todos os termos/UFs para buscar tudo de uma vez.
-    Integra termos de exclusão e domínios da org quando disponíveis.
+    Combina configs de todas as organizações em uma única config de busca.
+    O scraper busca a união de tudo para depois filtrar por org.
     """
     ufs = set()
     palavras_chave = set()
@@ -52,6 +50,7 @@ def unificar_configs(configs: list[dict]) -> dict:
     termos_alta = set()
     termos_media = set()
     termos_me_epp = set()
+    termos_exclusao = set()
     fpm_maximo = 0
 
     for c in configs:
@@ -62,15 +61,10 @@ def unificar_configs(configs: list[dict]) -> dict:
         termos_alta.update(c.get("termos_alta", []))
         termos_media.update(c.get("termos_media", []))
         termos_me_epp.update(c.get("termos_me_epp", []))
+        termos_exclusao.update(c.get("termos_exclusao", []))
         fpm_maximo = max(fpm_maximo, c.get("fpm_maximo", 2.8))
 
-    # Carrega termos de exclusão de todas as orgs (união)
-    termos_exclusao = set()
-    exclusoes_por_org = carregar_termos_exclusao()
-    for termos in exclusoes_por_org.values():
-        termos_exclusao.update(termos)
-
-    # Carrega domínios da org — modalidades da org prevalecem sobre user_config
+    # org_dominios_config — modalidades prevalecem quando configuradas
     dominios_por_org = carregar_dominios_org()
     for org_dominios in dominios_por_org.values():
         org_modalidades = org_dominios.get("modalidade_contratacao", [])
@@ -88,44 +82,6 @@ def unificar_configs(configs: list[dict]) -> dict:
         "termos_exclusao": sorted(termos_exclusao),
         "fpm_maximo": fpm_maximo,
     }
-
-
-def _config_padrao() -> dict:
-    """Config padrão baseada no .env."""
-    return {
-        "ufs": Config.UFS,
-        "fpm_maximo": Config.POPULACAO_MAXIMA,
-        "palavras_chave": Config.PALAVRAS_CHAVE,
-        "modalidades": Config.MODALIDADES,
-        "fontes": ["PNCP", "QUERIDO_DIARIO", "TCE_RJ"],
-        "termos_alta": TERMOS_ALTA,
-        "termos_media": TERMOS_MEDIA,
-        "termos_me_epp": TERMOS_ME_EPP,
-    }
-
-
-def carregar_termos_exclusao() -> dict[str, list[str]]:
-    """
-    Carrega termos de exclusão de todas as organizações.
-    Retorna dict org_id -> lista de termos.
-    """
-    if not _supabase_disponivel():
-        return {}
-
-    try:
-        from db import get_client
-        client = get_client()
-        result = client.table("org_termos_exclusao").select("org_id, termo").execute()
-        rows = result.data or []
-
-        exclusoes: dict[str, list[str]] = {}
-        for row in rows:
-            oid = row["org_id"]
-            exclusoes.setdefault(oid, []).append(row["termo"])
-        return exclusoes
-    except Exception as e:
-        log.error("Erro ao carregar termos de exclusão: %s", e)
-        return {}
 
 
 def carregar_dominios_org() -> dict[str, dict[str, list[int]]]:
@@ -152,6 +108,21 @@ def carregar_dominios_org() -> dict[str, dict[str, list[int]]]:
         return {}
 
 
+def _config_padrao() -> dict:
+    """Config padrão baseada no .env (usada quando não há orgs)."""
+    return {
+        "ufs": Config.UFS,
+        "fpm_maximo": Config.POPULACAO_MAXIMA,
+        "palavras_chave": Config.PALAVRAS_CHAVE,
+        "modalidades": Config.MODALIDADES,
+        "fontes": ["PNCP", "QUERIDO_DIARIO", "TCE_RJ"],
+        "termos_alta": TERMOS_ALTA,
+        "termos_media": TERMOS_MEDIA,
+        "termos_me_epp": TERMOS_ME_EPP,
+        "termos_exclusao": [],
+    }
+
+
 def _normalizar_config(c: dict) -> dict:
     """Garante que todos os campos existem."""
     padrao = _config_padrao()
@@ -164,6 +135,5 @@ def _normalizar_config(c: dict) -> dict:
         "termos_alta": c.get("termos_alta") or padrao["termos_alta"],
         "termos_media": c.get("termos_media") or padrao["termos_media"],
         "termos_me_epp": c.get("termos_me_epp") or padrao["termos_me_epp"],
+        "termos_exclusao": c.get("termos_exclusao") or [],
     }
-
-

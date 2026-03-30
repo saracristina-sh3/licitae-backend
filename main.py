@@ -81,11 +81,11 @@ def executar_busca(
     log.info("Execução: %s", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
     log.info("=" * 60)
 
-    # Carrega configurações dos usuários
-    from user_configs import carregar_configs_usuarios, unificar_configs
-    configs = carregar_configs_usuarios()
+    # Carrega configurações das organizações
+    from user_configs import carregar_configs_org, unificar_configs
+    configs = carregar_configs_org()
     busca_config = unificar_configs(configs)
-    log.info("Configs carregadas: %d usuário(s)", len(configs))
+    log.info("Configs carregadas: %d organização(ões)", len(configs))
     log.info("  UFs: %s", ", ".join(busca_config["ufs"]))
     log.info("  Palavras-chave: %d termos", len(busca_config["palavras_chave"]))
     log.info("  Fontes: %s", ", ".join(busca_config["fontes"]))
