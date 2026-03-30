@@ -97,33 +97,33 @@ def gravar_analise(client, resultado: ResultadoAnalise) -> dict | None:
         return None
 
 
-def buscar_licitacoes_pendentes(client, limite: int) -> list[dict]:
-    """Busca licitações abertas sem análise de edital."""
-    try:
-        result = client.rpc("licitacoes_sem_analise", {"p_limite": limite}).execute()
-        return result.data or []
-    except Exception:
-        log.debug("RPC indisponível, usando fallback")
-        result = (
-            client.table("licitacoes")
-            .select("id, cnpj_orgao, url_fonte")
-            .eq("proposta_aberta", True)
-            .eq("fonte", "PNCP")
-            .not_.is_("cnpj_orgao", "null")
-            .not_.is_("url_fonte", "null")
-            .order("relevancia", desc=False)
-            .order("data_publicacao", desc=True)
-            .limit(limite * 3)
-            .execute()
-        )
-        licitacoes = result.data or []
-        if not licitacoes:
-            return []
+def buscar_licitacoes_pendentes(client, limite: int, somente_abertas: bool = False) -> list[dict]:
+    """Busca licitações PNCP sem análise de edital.
+    Se somente_abertas=True, filtra por proposta_aberta (comportamento antigo).
+    Se False, analisa todas (abertas e encerradas).
+    """
+    q = (
+        client.table("licitacoes")
+        .select("id, cnpj_orgao, url_fonte")
+        .eq("fonte", "PNCP")
+        .not_.is_("cnpj_orgao", "null")
+        .not_.is_("url_fonte", "null")
+        .order("relevancia", desc=False)
+        .order("data_publicacao", desc=True)
+        .limit(limite * 3)
+    )
+    if somente_abertas:
+        q = q.eq("proposta_aberta", True)
 
-        ids = [l["id"] for l in licitacoes]
-        ja = client.table("analise_editais").select("licitacao_id").in_("licitacao_id", ids).execute()
-        ids_ja = {a["licitacao_id"] for a in (ja.data or [])}
-        return [l for l in licitacoes if l["id"] not in ids_ja][:limite]
+    result = q.execute()
+    licitacoes = result.data or []
+    if not licitacoes:
+        return []
+
+    ids = [l["id"] for l in licitacoes]
+    ja = client.table("analise_editais").select("licitacao_id").in_("licitacao_id", ids).execute()
+    ids_ja = {a["licitacao_id"] for a in (ja.data or [])}
+    return [l for l in licitacoes if l["id"] not in ids_ja][:limite]
 
 
 def extrair_cnpj_ano_seq(licitacao: dict) -> tuple[str, int, int] | None:

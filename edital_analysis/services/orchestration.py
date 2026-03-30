@@ -194,16 +194,20 @@ def analisar_licitacao(
 def analisar_licitacoes_pendentes(
     limite: int = 10,
     db_client=None,
+    somente_abertas: bool = False,
 ) -> dict[str, int]:
-    """Processa licitações pendentes. Chamado pelo cron."""
+    """Processa licitações pendentes.
+    somente_abertas=True: só analisa com proposta aberta (padrão no cron).
+    somente_abertas=False: analisa todas (para processar histórico).
+    """
     from db import get_client
 
     client = db_client or get_client()
     log.info("=" * 50)
-    log.info("ANÁLISE DE EDITAIS v2")
+    log.info("ANÁLISE DE EDITAIS v2%s", " (somente abertas)" if somente_abertas else " (todas)")
     log.info("=" * 50)
 
-    pendentes = buscar_licitacoes_pendentes(client, limite)
+    pendentes = buscar_licitacoes_pendentes(client, limite, somente_abertas=somente_abertas)
 
     if not pendentes:
         log.info("Nenhuma licitação pendente para análise")

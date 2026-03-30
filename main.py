@@ -415,6 +415,7 @@ def main():
     parser.add_argument("--monitorar", action="store_true", help="Verifica mudanças em licitações monitoradas")
     parser.add_argument("--verificar-prazos", action="store_true", help="Verifica prazos próximos e envia alertas")
     parser.add_argument("--analisar-editais", action="store_true", help="Analisa editais de licitações abertas")
+    parser.add_argument("--analisar-todos-editais", action="store_true", help="Analisa editais de TODAS as licitações (abertas + encerradas)")
     parser.add_argument("--limite-editais", type=int, default=10, help="Quantidade de editais para analisar (padrão: 10)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Logs detalhados (DEBUG)")
     parser.add_argument(
@@ -471,6 +472,15 @@ def main():
             log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
             return
         executar_analise_editais(args.limite_editais)
+        return
+
+    if args.analisar_todos_editais:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        from edital_analysis.services.orchestration import analisar_licitacoes_pendentes
+        resultado = analisar_licitacoes_pendentes(limite=args.limite_editais, somente_abertas=False)
+        log.info("Análise completa: %s", resultado)
         return
 
     if args.sync_plataformas:
