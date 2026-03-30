@@ -35,12 +35,6 @@ TERMOS_MEDIA: list[str] = [
     "email", "e-mail",
 ]
 
-TERMOS_ME_EPP: list[str] = [
-    "exclusivo para microempresa", "exclusivo para me",
-    "exclusivo me/epp", "exclusivo me e epp",
-    "participação exclusiva", "cota reservada", "lei complementar 123",
-]
-
 # ── Pesos do scoring (total = 100) ──────────────────────────
 
 PESO_MATCH_OBJETO = 30        # match no objetoCompra

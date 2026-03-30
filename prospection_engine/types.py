@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, fields
 from typing import TypedDict
 
 from config import Config
-from prospection_engine.constants import TERMOS_ALTA, TERMOS_ME_EPP, TERMOS_MEDIA
+from prospection_engine.constants import TERMOS_ALTA, TERMOS_MEDIA
 
 
 # ── Configuração da busca ────────────────────────────────────
@@ -25,7 +25,6 @@ class BuscaConfig:
     fpm_maximo: int = field(default_factory=lambda: Config.POPULACAO_MAXIMA)
     termos_alta: list[str] = field(default_factory=lambda: list(TERMOS_ALTA))
     termos_media: list[str] = field(default_factory=lambda: list(TERMOS_MEDIA))
-    termos_me_epp: list[str] = field(default_factory=lambda: list(TERMOS_ME_EPP))
     termos_exclusao: list[str] = field(default_factory=list)
     janela_dias: int = field(default_factory=lambda: getattr(Config, "JANELA_DIAS", 1))
     max_workers: int = field(default_factory=lambda: getattr(Config, "MAX_WORKERS", 3))

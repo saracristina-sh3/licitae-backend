@@ -20,7 +20,10 @@ from prospection_engine.constants import (
     VALOR_MIN_ESPERADO,
 )
 from prospection_engine.types import BuscaConfig, MatchResult
-from utils import detectar_me_epp, normalizar
+from utils import normalizar
+
+# Códigos PNCP de tipoBeneficio que indicam exclusividade ME/EPP
+_BENEFICIO_ME_EPP = {1, 2, 3}
 
 log = logging.getLogger(__name__)
 
@@ -83,8 +86,8 @@ def calcular_score(
     elif valor > 0:
         score += PESO_VALOR_ESTIMADO * 0.5  # valor existe mas fora da faixa
 
-    # 6. Exclusivo ME/EPP (10 pts bônus)
-    if detectar_me_epp(texto_norm, cfg.termos_me_epp):
+    # 6. Exclusivo ME/EPP (10 pts bônus) — via código PNCP tipoBeneficioId
+    if contratacao.get("tipoBeneficioId", 0) in _BENEFICIO_ME_EPP:
         score += PESO_ME_EPP
 
     return round(min(score, 100.0), 1)

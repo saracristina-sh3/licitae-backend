@@ -82,7 +82,6 @@ class TestScoring:
             palavras_chave=["software", "sistema"],
             termos_alta=["licença de uso"],
             termos_media=["software"],
-            termos_me_epp=["exclusivo me/epp"],
         )
 
     def test_score_basico_objeto(self):

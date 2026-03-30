@@ -6,7 +6,7 @@ Fonte única: org_config + org_dominios_config.
 import logging
 import os
 from config import Config
-from utils import TERMOS_ALTA, TERMOS_MEDIA, TERMOS_ME_EPP, fpm_para_populacao
+from utils import TERMOS_ALTA, TERMOS_MEDIA, fpm_para_populacao
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +49,6 @@ def unificar_configs(configs: list[dict]) -> dict:
     fontes = set()
     termos_alta = set()
     termos_media = set()
-    termos_me_epp = set()
     termos_exclusao = set()
     fpm_maximo = 0
 
@@ -60,7 +59,6 @@ def unificar_configs(configs: list[dict]) -> dict:
         fontes.update(c.get("fontes", []))
         termos_alta.update(c.get("termos_alta", []))
         termos_media.update(c.get("termos_media", []))
-        termos_me_epp.update(c.get("termos_me_epp", []))
         termos_exclusao.update(c.get("termos_exclusao", []))
         fpm_maximo = max(fpm_maximo, c.get("fpm_maximo", 2.8))
 
@@ -78,7 +76,6 @@ def unificar_configs(configs: list[dict]) -> dict:
         "fontes": sorted(fontes),
         "termos_alta": sorted(termos_alta),
         "termos_media": sorted(termos_media),
-        "termos_me_epp": sorted(termos_me_epp),
         "termos_exclusao": sorted(termos_exclusao),
         "fpm_maximo": fpm_maximo,
     }
@@ -118,7 +115,6 @@ def _config_padrao() -> dict:
         "fontes": ["PNCP", "QUERIDO_DIARIO", "TCE_RJ"],
         "termos_alta": TERMOS_ALTA,
         "termos_media": TERMOS_MEDIA,
-        "termos_me_epp": TERMOS_ME_EPP,
         "termos_exclusao": [],
     }
 
@@ -134,6 +130,5 @@ def _normalizar_config(c: dict) -> dict:
         "fontes": c.get("fontes") or padrao["fontes"],
         "termos_alta": c.get("termos_alta") or padrao["termos_alta"],
         "termos_media": c.get("termos_media") or padrao["termos_media"],
-        "termos_me_epp": c.get("termos_me_epp") or padrao["termos_me_epp"],
         "termos_exclusao": c.get("termos_exclusao") or [],
     }

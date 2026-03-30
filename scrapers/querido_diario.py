@@ -11,7 +11,6 @@ import time
 import requests
 from config import Config
 from municipios import carregar_municipios
-from utils import detectar_me_epp
 
 log = logging.getLogger(__name__)
 
@@ -136,7 +135,6 @@ def buscar_querido_diario(
                     if len(texto_limpo) < 50:
                         continue
 
-                    me_epp = detectar_me_epp(texto_limpo)
                     encontrados += 1
 
                     resultados.append({
@@ -148,7 +146,7 @@ def buscar_querido_diario(
                         "orgao": g.get("territory_name", mun["nome"]),
                         "cnpj_orgao": "",
                         "objeto": texto_limpo[:500],
-                        "exclusivo_me_epp": me_epp,
+                        "exclusivo_me_epp": False,
                         "modalidade": "Diário Oficial",
                         "valor_estimado": 0,
                         "valor_homologado": 0,

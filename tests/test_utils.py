@@ -1,4 +1,4 @@
-"""Testes para funções utilitárias: normalização, classificação, FPM e ME/EPP."""
+"""Testes para funções utilitárias: normalização, classificação e FPM."""
 
 import pytest
 import sys
@@ -10,7 +10,6 @@ from utils import (
     normalizar,
     match_palavras_chave,
     classificar_relevancia,
-    detectar_me_epp,
     fpm_coeficiente,
     fpm_para_populacao,
 )
@@ -94,26 +93,6 @@ class TestClassificarRelevancia:
         assert classificar_relevancia(
             [], "permissão de uso de software"
         ) == "ALTA"
-
-
-# ── Detecção ME/EPP ─────────────────────────────────────────
-
-
-class TestDetectarMeEpp:
-    def test_exclusivo_me(self):
-        assert detectar_me_epp("Exclusivo para microempresa e EPP") is True
-
-    def test_cota_reservada(self):
-        assert detectar_me_epp("cota reservada para ME/EPP") is True
-
-    def test_lei_complementar(self):
-        assert detectar_me_epp("conforme lei complementar 123") is True
-
-    def test_sem_me_epp(self):
-        assert detectar_me_epp("licitação aberta a todos") is False
-
-    def test_case_insensitive(self):
-        assert detectar_me_epp("EXCLUSIVO PARA MICROEMPRESA") is True
 
 
 # ── FPM ──────────────────────────────────────────────────────

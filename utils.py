@@ -61,12 +61,6 @@ TERMOS_MEDIA = [
     "email", "e-mail",
 ]
 
-TERMOS_ME_EPP = [
-    "exclusivo para microempresa", "exclusivo para me",
-    "exclusivo me/epp", "exclusivo me e epp",
-    "participação exclusiva", "cota reservada", "lei complementar 123",
-]
-
 
 # ── Classificação ───────────────────────────────────────────
 
@@ -98,8 +92,3 @@ def match_termos_exclusao(texto: str, termos_exclusao: list[str]) -> bool:
     return any(normalizar(t) in texto_norm for t in termos_exclusao)
 
 
-def detectar_me_epp(texto: str, termos: list[str] | None = None) -> bool:
-    """Detecta se a licitação é exclusiva para ME/EPP."""
-    termos = termos or TERMOS_ME_EPP
-    texto_norm = normalizar(texto)
-    return any(normalizar(t) in texto_norm for t in termos)

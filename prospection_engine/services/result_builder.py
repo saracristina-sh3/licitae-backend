@@ -5,7 +5,9 @@ from __future__ import annotations
 from prospection_engine.constants import MODALIDADE_NOMES
 from prospection_engine.services.scoring import score_para_relevancia
 from prospection_engine.types import BuscaConfig, MatchResult, ResultadoLicitacao
-from utils import detectar_me_epp
+
+# Códigos PNCP de tipoBeneficio que indicam exclusividade ME/EPP
+_BENEFICIO_ME_EPP = {1, 2, 3}  # Exclusiva, Subcontratação, Cota reservada
 
 
 def _extrair_url_pncp(contratacao: dict) -> str:
@@ -40,7 +42,7 @@ def montar_resultado(
         orgao=orgao.get("razaoSocial", ""),
         cnpj_orgao=orgao.get("cnpj", ""),
         objeto=objeto,
-        exclusivo_me_epp=detectar_me_epp(texto_completo, cfg.termos_me_epp),
+        exclusivo_me_epp=contratacao.get("tipoBeneficioId", 0) in _BENEFICIO_ME_EPP,
         modalidade=MODALIDADE_NOMES.get(
             contratacao.get("modalidadeId", 0), str(contratacao.get("modalidadeId", ""))
         ),

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS org_config (
     modalidades INTEGER[] DEFAULT '{6,7,8,9,12}',
     termos_alta TEXT[] DEFAULT '{permissão de uso,licença de uso,cessão de uso,locação de software,sistema integrado de gestão}',
     termos_media TEXT[] DEFAULT '{software,sistema de gestão,solução tecnológica}',
-    termos_me_epp TEXT[] DEFAULT '{exclusivo para microempresa,exclusivo para me,exclusivo me/epp,participação exclusiva,cota reservada}',
+
     termos_exclusao TEXT[] DEFAULT '{}',
     atualizado_por UUID REFERENCES auth.users(id),
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -28,22 +28,27 @@ CREATE INDEX IF NOT EXISTS idx_org_config_org ON org_config(org_id);
 
 ALTER TABLE org_config ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membro lê org_config" ON org_config;
 CREATE POLICY "Membro lê org_config"
     ON org_config FOR SELECT TO authenticated
     USING (org_id IN (SELECT get_user_org_ids()));
 
+DROP POLICY IF EXISTS "Admin insere org_config" ON org_config;
 CREATE POLICY "Admin insere org_config"
     ON org_config FOR INSERT TO authenticated
     WITH CHECK (org_id IN (SELECT get_user_admin_org_ids()));
 
+DROP POLICY IF EXISTS "Admin atualiza org_config" ON org_config;
 CREATE POLICY "Admin atualiza org_config"
     ON org_config FOR UPDATE TO authenticated
     USING (org_id IN (SELECT get_user_admin_org_ids()));
 
+DROP POLICY IF EXISTS "Admin remove org_config" ON org_config;
 CREATE POLICY "Admin remove org_config"
     ON org_config FOR DELETE TO authenticated
     USING (org_id IN (SELECT get_user_admin_org_ids()));
 
+DROP POLICY IF EXISTS "Service role org_config" ON org_config;
 CREATE POLICY "Service role org_config"
     ON org_config FOR ALL TO service_role USING (true);
 
@@ -53,7 +58,7 @@ CREATE POLICY "Service role org_config"
 
 INSERT INTO org_config (
     org_id, ufs, fpm_maximo, palavras_chave, fontes, modalidades,
-    termos_alta, termos_media, termos_me_epp, atualizado_por
+    termos_alta, termos_media, atualizado_por
 )
 SELECT DISTINCT ON (p.org_id)
     p.org_id,
@@ -64,7 +69,6 @@ SELECT DISTINCT ON (p.org_id)
     COALESCE(uc.modalidades, '{6,7,8,9,12}'),
     COALESCE(uc.termos_alta, '{}'),
     COALESCE(uc.termos_media, '{}'),
-    COALESCE(uc.termos_me_epp, '{}'),
     uc.user_id
 FROM user_config uc
 JOIN profiles p ON p.id = uc.user_id
@@ -103,7 +107,7 @@ BEGIN
 
     -- Cria org_config herdando config do admin
     INSERT INTO org_config (org_id, ufs, fpm_maximo, palavras_chave, fontes, modalidades,
-        termos_alta, termos_media, termos_me_epp, atualizado_por)
+        termos_alta, termos_media, atualizado_por)
     SELECT new_org_id,
         COALESCE(uc.ufs, '{MG,RJ,SP,ES,PR,SC,RS,GO,BA,PE,CE}'),
         COALESCE(uc.fpm_maximo, 2.8),
@@ -112,7 +116,6 @@ BEGIN
         COALESCE(uc.modalidades, '{6,7,8,9,12}'),
         COALESCE(uc.termos_alta, '{}'),
         COALESCE(uc.termos_media, '{}'),
-        COALESCE(uc.termos_me_epp, '{}'),
         auth.uid()
     FROM user_config uc
     WHERE uc.user_id = auth.uid();
@@ -141,5 +144,5 @@ COMMENT ON COLUMN user_config.modalidades IS 'DEPRECATED: usar org_config.modali
 COMMENT ON COLUMN user_config.fontes IS 'DEPRECATED: usar org_config.fontes';
 COMMENT ON COLUMN user_config.termos_alta IS 'DEPRECATED: usar org_config.termos_alta';
 COMMENT ON COLUMN user_config.termos_media IS 'DEPRECATED: usar org_config.termos_media';
-COMMENT ON COLUMN user_config.termos_me_epp IS 'DEPRECATED: usar org_config.termos_me_epp';
+COMMENT ON COLUMN user_config.termos_me_epp IS 'DEPRECATED: ME/EPP agora detectado via tipoBeneficioId do PNCP';
 COMMENT ON TABLE org_termos_exclusao IS 'DEPRECATED: usar org_config.termos_exclusao';

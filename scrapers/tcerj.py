@@ -8,7 +8,7 @@ import logging
 import requests
 from config import Config
 from municipios import carregar_municipios
-from utils import match_palavras_chave, classificar_relevancia, detectar_me_epp
+from utils import match_palavras_chave, classificar_relevancia
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,6 @@ def buscar_tcerj(
             vistos.add(chave)
 
             relevancia = classificar_relevancia(matches, objeto)
-            me_epp = detectar_me_epp(objeto)
             data_pub = lic.get("DataPublicacaoEdital", "") or lic.get("DataPublicacaoOficial", "")
 
             resultados.append({
@@ -93,7 +92,7 @@ def buscar_tcerj(
                 "orgao": lic.get("Unidade", ""),
                 "cnpj_orgao": "",
                 "objeto": objeto,
-                "exclusivo_me_epp": me_epp,
+                "exclusivo_me_epp": False,
                 "modalidade": lic.get("Modalidade", ""),
                 "valor_estimado": lic.get("ValorEstimado", 0) or 0,
                 "valor_homologado": 0,
