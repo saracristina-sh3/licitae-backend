@@ -136,6 +136,9 @@ def inserir_licitacoes(resultados: list[dict]) -> dict:
             "palavras_chave": r.get("palavras_chave_encontradas", "").split(", ") if isinstance(r.get("palavras_chave_encontradas"), str) else r.get("palavras_chave_encontradas", []),
             "dados_brutos": r.get("dados_brutos"),
             "exclusivo_me_epp": r.get("exclusivo_me_epp", False),
+            "modalidade_id": r.get("modalidade_id"),
+            "modo_disputa_id": r.get("modo_disputa_id"),
+            "situacao_compra_id": r.get("situacao_compra_id"),
         }
 
         try:

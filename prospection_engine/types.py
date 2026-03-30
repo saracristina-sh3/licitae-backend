@@ -63,10 +63,14 @@ class ResultadoLicitacao(TypedDict):
     fonte: str
     ano_compra: str
     seq_compra: str
-    # Novos campos v1
+    # Campos v1
     score: float                  # 0.0 a 100.0
     informacao_complementar: str  # texto do informacaoComplementar
     urgencia: str                 # "URGENTE" | "PROXIMA" | "NORMAL"
+    # IDs de domínio PNCP
+    modalidade_id: int | None
+    modo_disputa_id: int | None
+    situacao_compra_id: int | None
 
 
 # ── Resultado do matching ────────────────────────────────────

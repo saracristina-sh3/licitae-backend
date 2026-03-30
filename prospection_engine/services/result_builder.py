@@ -58,8 +58,11 @@ def montar_resultado(
         fonte="PNCP",
         ano_compra=str(contratacao.get("anoCompra", "")),
         seq_compra=str(contratacao.get("sequencialCompra", "")),
-        # Novos campos v1
         score=match.score,
         informacao_complementar=info_compl,
         urgencia=urgencia,
+        # IDs de domínio PNCP
+        modalidade_id=contratacao.get("modalidadeId"),
+        modo_disputa_id=contratacao.get("modoDisputaId"),
+        situacao_compra_id=contratacao.get("situacaoCompraId"),
     )
