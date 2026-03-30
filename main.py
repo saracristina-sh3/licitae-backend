@@ -48,23 +48,25 @@ def _supabase_disponivel() -> bool:
 def sync_municipios():
     """Sincroniza municípios do IBGE no Supabase.
 
-    Traz TODAS as UFs habilitadas, independente do .env.
-    O .env (Config.UFS) é usado só para o scraper de licitações.
+    Lê UFs de todas as org_configs para trazer tudo que as orgs precisam.
     """
     from municipios import carregar_municipios
     from db import sync_municipios as db_sync
+    from user_configs import carregar_configs_org, unificar_configs
 
-    # UFs fixas para sync de municípios — independe do .env
-    # Adicionar novas UFs aqui conforme expandir cobertura
-    UFS_SYNC = ["MG", "RJ", "SP", "ES", "PR", "SC", "RS", "GO", "BA", "PE", "CE"]
+    configs = carregar_configs_org()
+    busca_config = unificar_configs(configs)
+    ufs_sync = busca_config.get("ufs") or Config.UFS
+    fpm_max = busca_config.get("fpm_maximo") or Config.POPULACAO_MAXIMA
 
-    log.info("Sincronizando municípios de %d UFs no Supabase...", len(UFS_SYNC))
-    munis = carregar_municipios(UFS_SYNC, Config.POPULACAO_MAXIMA)
+    log.info("Sincronizando municípios de %d UFs no Supabase...", len(ufs_sync))
+    munis = carregar_municipios(ufs_sync, fpm_max)
     count = db_sync(munis)
     log.info("Municípios sincronizados: %d", count)
-    for uf in UFS_SYNC:
+    for uf in sorted(ufs_sync):
         c = len([m for m in munis if m["uf"] == uf])
-        log.info("  %s: %d", uf, c)
+        if c > 0:
+            log.info("  %s: %d", uf, c)
 
 
 def executar_busca(
