@@ -145,7 +145,6 @@ def inserir_licitacoes(resultados: list[dict]) -> dict:
             client.table("licitacoes").upsert(
                 row,
                 on_conflict="hash_dedup",
-                ignore_duplicates=True,
             ).execute()
             stats["inseridas"] += 1
         except Exception as e:
