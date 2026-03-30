@@ -36,6 +36,9 @@ def montar_item_row(
         municipio=metadata.get("municipio"),
         codigo_ibge=metadata.get("codigo_ibge"),
         modalidade_id=metadata.get("modalidade_id"),
+        material_ou_servico=item.get("materialOuServico"),
+        tipo_beneficio_id=item.get("tipoBeneficio"),
+        criterio_julgamento_id=item.get("criterioJulgamentoId"),
         coletado_em=datetime.now(timezone.utc).isoformat(),
         versao_coletor=VERSAO_COLETOR,
     )

@@ -90,9 +90,16 @@ def _calcular_score_item(
 ) -> float:
     """
     Calcula score de similaridade (0-100) para um item.
-    Usa sinônimos para matching de termos. Inclui NCM e unidade.
+    Usa sinônimos para matching de termos. Inclui NCM, unidade e material/serviço.
     """
     score = 0.0
+
+    # NCM igual (forte indicador de similaridade)
+    ncm_item = item.get("ncm_nbs_codigo") or ""
+    ncm_ref_raw = licitacao_ref.get("palavras_chave") or []
+    # Se ambos têm NCM e são iguais, bônus alto
+    if ncm_item and len(ncm_item) >= 4:
+        score += SIM_NCM_IGUAL * 0.5  # Bônus por ter NCM preenchido
 
     # UF
     if item.get("uf") and item["uf"] == licitacao_ref.get("uf"):
@@ -101,15 +108,15 @@ def _calcular_score_item(
     # Termos em comum (com sinônimos aplicados)
     if termos_ref:
         termos_item = extrair_termos(item.get("descricao") or "")
-        termos_comuns = len(set(termos_ref) & set(termos_item))
-        ratio = min(termos_comuns / len(termos_ref), 1.0)
-        score += SIM_TERMOS_COMUNS * ratio
+        if termos_item:
+            termos_comuns = len(set(termos_ref) & set(termos_item))
+            ratio = min(termos_comuns / max(len(termos_ref), 1), 1.0)
+            score += SIM_TERMOS_COMUNS * ratio
 
-    # Unidade de medida (usa validação centralizada)
+    # Unidade de medida
     unidade_item = item.get("unidade_medida") or ""
-    # Licitações não têm unidade de referência, mas bonifica se compatível
     if unidade_item:
-        score += SIM_UNIDADE_IGUAL * 0.5  # Bônus parcial por ter unidade
+        score += SIM_UNIDADE_IGUAL * 0.5
 
     # Recência
     created = item.get("created_at")
@@ -124,9 +131,39 @@ def _calcular_score_item(
         except (ValueError, TypeError):
             pass
 
-    # Normalizar para 0-100 (máximo possível = 65 sem NCM)
+    # Normalizar para 0-100
     score = min(score * (100 / 65), 100)
     return round(score, 2)
+
+
+_TERMOS_SERVICO = {
+    "licenca", "cessao", "permissao", "locacao", "software", "sistema",
+    "saas", "cloud", "hospedagem", "assinatura", "plataforma",
+    "servico", "manutencao", "suporte", "consultoria", "treinamento",
+    "implantacao", "desenvolvimento", "configuracao",
+}
+
+_TERMOS_MATERIAL = {
+    "aquisicao", "equipamento", "veiculo", "ambulancia", "computador",
+    "notebook", "impressora", "servidor", "monitor", "mobiliario",
+    "mesa", "cadeira", "trator", "caminhao", "picador",
+}
+
+
+def _inferir_material_servico(objeto: str) -> str | None:
+    """Infere M (Material) ou S (Serviço) a partir do texto do objeto.
+    Retorna None se não consegue determinar."""
+    texto = normalizar(objeto)
+    tokens = set(texto.split())
+
+    score_s = len(tokens & _TERMOS_SERVICO)
+    score_m = len(tokens & _TERMOS_MATERIAL)
+
+    if score_s > score_m and score_s >= 1:
+        return "S"
+    if score_m > score_s and score_m >= 1:
+        return "M"
+    return None
 
 
 class TextSearchStrategy:
@@ -239,8 +276,8 @@ class TextSearchStrategy:
                 compativel_unidade=True,
             ))
 
-        # Filtrar por score mínimo e ordenar
-        resultados = [r for r in resultados if r["score"] >= 25]
+        # Score mínimo 40 (era 25) — evita matches fracos
+        resultados = [r for r in resultados if r["score"] >= 40]
         resultados.sort(key=lambda r: r["score"], reverse=True)
         return resultados
 
@@ -254,8 +291,12 @@ class TextSearchStrategy:
         uf = licitacao.get("uf", "")
         palavras_chave = licitacao.get("palavras_chave") or []
 
-        # Categoria da licitação de referência
+        # Categoria da licitação de referência (fallback textual)
         cat_ref = classificar_item(objeto)
+
+        # Determina se é Material ou Serviço pela licitação
+        # (inferido das palavras-chave — licença/sistema = S, aquisição = M)
+        mat_serv_ref = _inferir_material_servico(objeto)
 
         # Prioriza palavras-chave (mais relevantes) sobre termos do objeto
         if palavras_chave:
@@ -266,7 +307,7 @@ class TextSearchStrategy:
         if not termos_ref:
             return []
 
-        # Usa AND (&) para exigir TODOS os termos
+        # Usa AND (&) para exigir TODOS os termos (mais restritivo)
         termos_busca = " & ".join(termos_ref[:4])
 
         def _query(filtro_uf: bool):
@@ -280,9 +321,12 @@ class TextSearchStrategy:
             )
             if filtro_uf and uf:
                 q = q.eq("uf", uf)
+            # Filtro primário: Material vs Serviço (quando disponível)
+            if mat_serv_ref:
+                q = q.eq("material_ou_servico", mat_serv_ref)
             return q
 
-        # Camada 1: mesma UF
+        # Camada 1: mesma UF + mesmo tipo (M/S)
         try:
             result = _query(filtro_uf=True).execute()
             itens_raw = result.data or []
@@ -290,7 +334,7 @@ class TextSearchStrategy:
             log.warning("Erro text_search itens com UF: %s", e)
             itens_raw = []
 
-        # Camada 2: sem UF
+        # Camada 2: sem UF, mesmo tipo (M/S)
         if len(itens_raw) < AMOSTRA_MINIMA:
             try:
                 result = _query(filtro_uf=False).execute()
@@ -298,7 +342,7 @@ class TextSearchStrategy:
             except Exception as e:
                 log.warning("Erro text_search itens sem UF: %s", e)
 
-        # Camada 3: ilike
+        # Camada 3: ilike (último recurso, ainda com filtro M/S)
         if not itens_raw and termos_ref:
             try:
                 q = (
@@ -311,6 +355,8 @@ class TextSearchStrategy:
                 )
                 if uf:
                     q = q.eq("uf", uf)
+                if mat_serv_ref:
+                    q = q.eq("material_ou_servico", mat_serv_ref)
                 result = q.execute()
                 itens_raw = result.data or []
             except Exception as e:
@@ -320,10 +366,16 @@ class TextSearchStrategy:
         # Classificar cada resultado
         resultados: list[ResultadoSimilaridade] = []
         for item in itens_raw:
-            # Validar categoria — rejeitar se incompatível
-            cat_item = classificar_item(item.get("descricao") or "")
-            if cat_ref != cat_item:
-                continue  # Golden Rule
+            # Golden Rule 1: material_ou_servico do PNCP (mais confiável)
+            mat_serv_item = item.get("material_ou_servico")
+            if mat_serv_ref and mat_serv_item and mat_serv_ref != mat_serv_item:
+                continue
+
+            # Golden Rule 2: categoria textual (fallback quando sem campo PNCP)
+            if not mat_serv_item:
+                cat_item = classificar_item(item.get("descricao") or "")
+                if cat_ref != cat_item:
+                    continue
 
             resultados_item = item.get("resultados_item") or []
             if isinstance(resultados_item, dict):
@@ -359,7 +411,7 @@ class TextSearchStrategy:
                 compativel_unidade=True,
             ))
 
-        # Filtrar por score mínimo — evita itens sem relação real
-        resultados = [r for r in resultados if r["score"] >= 30]
+        # Score mínimo 45 (era 30) — evita matches fracos
+        resultados = [r for r in resultados if r["score"] >= 45]
         resultados.sort(key=lambda r: r["score"], reverse=True)
         return resultados

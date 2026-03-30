@@ -37,6 +37,9 @@ class ItemRow(TypedDict):
     municipio: str | None
     codigo_ibge: str | None
     modalidade_id: int | None
+    material_ou_servico: str | None
+    tipo_beneficio_id: int | None
+    criterio_julgamento_id: int | None
     coletado_em: str | None
     versao_coletor: str
 

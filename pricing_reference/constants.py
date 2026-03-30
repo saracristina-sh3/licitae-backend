@@ -43,7 +43,9 @@ SIM_RECENTE = 10
 SELECT_ITENS = (
     "id, descricao, ncm_nbs_codigo, quantidade, unidade_medida, "
     "valor_unitario_estimado, valor_total_estimado, "
-    "plataforma_nome, uf, municipio, modalidade_id, created_at, "
+    "plataforma_nome, uf, municipio, modalidade_id, "
+    "material_ou_servico, tipo_beneficio_id, criterio_julgamento_id, "
+    "created_at, "
     "resultados_item(valor_unitario_homologado, valor_total_homologado, "
     "nome_fornecedor, porte_fornecedor, percentual_desconto)"
 )

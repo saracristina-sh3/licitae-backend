@@ -296,36 +296,104 @@ def executar_envio_convites():
         log.error("Erro no envio de convites: %s", e)
 
 
-def agendar():
-    """Agenda busca diária às 12h e monitoramento a cada 4h."""
-    log.info("Agendador iniciado.")
-    log.info("  Busca de licitações: diária às 12:00")
-    log.info("  Monitoramento de mudanças: a cada 4 horas")
-    log.info("  Verificação de prazos: diária às 08:00")
-    log.info("  Análise de editais: diária às 13:00")
-    log.info("  Comparativo de mercado: diária às 16:00")
-    log.info("Pressione Ctrl+C para parar.")
+def _executar_com_log(nome: str, fn, *args, **kwargs):
+    """Executa uma função com log de início/fim e duração."""
+    import time as _time
+    log.info("▶ [%s] Iniciando...", nome)
+    inicio = _time.time()
+    try:
+        resultado = fn(*args, **kwargs)
+        duracao = _time.time() - inicio
+        log.info("✓ [%s] Concluído em %.1fs — %s", nome, duracao, resultado or "OK")
+        return resultado
+    except Exception as e:
+        duracao = _time.time() - inicio
+        log.error("✗ [%s] Falhou em %.1fs — %s", nome, duracao, e)
+        return None
 
-    schedule.every().day.at("12:00").do(executar_busca)
-    schedule.every(4).hours.do(executar_monitoramento)
+
+def executar_pipeline_diario():
+    """Pipeline sequencial com dependências corretas."""
+    log.info("=" * 60)
+    log.info("PIPELINE DIÁRIO — %s", datetime.now().strftime("%d/%m/%Y %H:%M"))
+    log.info("=" * 60)
+
+    # Fase 1: Coleta de licitações (base para tudo)
+    _executar_com_log("Busca PNCP", executar_busca)
+
+    # Fase 2: Enriquecimento (depende da Fase 1)
+    _executar_com_log("Análise de editais", executar_analise_editais)
+    _executar_com_log("Coleta de itens", executar_coleta_itens)
+
+    # Fase 3: Resultados (depende da Fase 2 - itens)
+    _executar_com_log("Coleta de resultados", executar_coleta_resultados)
+
+    # Fase 4: Inteligência (depende das Fases 2-3)
+    _executar_com_log("Comparativo de mercado", executar_comparativo_mercado)
+    _executar_com_log("Preços de referência", executar_precos_referencia)
+
+    log.info("=" * 60)
+    log.info("PIPELINE DIÁRIO CONCLUÍDO")
+    log.info("=" * 60)
+
+
+def executar_coleta_plataformas():
+    """Coleta itens de todas as plataformas-alvo (semanal)."""
+    from item_collector import coletar_por_plataforma
+
+    plataformas = Config.PLATAFORMAS_ALVO
+    log.info("Coleta semanal de %d plataformas: %s", len(plataformas), plataformas)
+
+    for plat_id in plataformas:
+        _executar_com_log(
+            f"Plataforma {plat_id}",
+            coletar_por_plataforma,
+            id_usuario=plat_id,
+            dias=30,
+        )
+
+
+def executar_syncs_semanais():
+    """Sync de municípios e plataformas (semanal)."""
+    _executar_com_log("Sync municípios", sync_municipios)
+    try:
+        from platform_mapper import popular_plataformas_conhecidas
+        _executar_com_log("Sync plataformas", popular_plataformas_conhecidas)
+    except Exception as e:
+        log.error("Erro no sync de plataformas: %s", e)
+
+
+def agendar():
+    """Agenda automação completa com pipeline sequencial."""
+    log.info("=" * 60)
+    log.info("AGENDADOR LICITAÊ")
+    log.info("=" * 60)
+    log.info("  08:00 — Verificação de prazos + alertas")
+    log.info("  12:00 — Pipeline diário (busca → editais → itens → resultados → comparativo → preços)")
+    log.info("  4h    — Monitoramento de mudanças")
+    log.info("  30min — Envio de convites")
+    log.info("  Dom 06:00 — Syncs semanais (municípios, plataformas)")
+    log.info("  Dom 07:00 — Coleta de plataformas-alvo")
+    log.info("=" * 60)
+
+    # Diário
     schedule.every().day.at("08:00").do(executar_verificacao_prazos)
-    schedule.every().day.at("13:00").do(executar_analise_editais)
+    schedule.every().day.at("12:00").do(executar_pipeline_diario)
+
+    # Recorrente
+    schedule.every(4).hours.do(executar_monitoramento)
     schedule.every(30).minutes.do(executar_envio_convites)
-    schedule.every().day.at("14:00").do(executar_coleta_itens)
-    schedule.every().day.at("15:00").do(executar_coleta_resultados)
-    schedule.every().day.at("16:00").do(executar_comparativo_mercado)
-    schedule.every().day.at("17:00").do(executar_precos_referencia)
+
+    # Semanal (domingo)
+    schedule.every().sunday.at("06:00").do(executar_syncs_semanais)
+    schedule.every().sunday.at("07:00").do(executar_coleta_plataformas)
 
     # Executa imediatamente na primeira vez
-    executar_busca()
-    executar_monitoramento()
+    log.info("Execução inicial...")
     executar_verificacao_prazos()
-    executar_analise_editais()
     executar_envio_convites()
-    executar_coleta_itens()
-    executar_coleta_resultados()
-    executar_comparativo_mercado()
-    executar_precos_referencia()
+    executar_pipeline_diario()
+    executar_monitoramento()
 
     while True:
         schedule.run_pending()
