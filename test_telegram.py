@@ -14,28 +14,47 @@ if not Config.TELEGRAM_BOT_TOKEN:
 
 print(f"Bot token: {Config.TELEGRAM_BOT_TOKEN[:10]}...{Config.TELEGRAM_BOT_TOKEN[-5:]}")
 
-# Pega chat_id do argumento ou do user_config
-chat_id = sys.argv[1] if len(sys.argv) > 1 else None
+# Modo 1: chat_id direto como argumento
+if len(sys.argv) > 1:
+    chat_id = sys.argv[1]
+    print(f"Testando chat_id: {chat_id}")
+    ok = enviar_mensagem(
+        chat_id,
+        "✅ <b>Licitaê — Teste de conexão</b>\n\n"
+        "Se você está vendo esta mensagem, as notificações do Telegram estão funcionando!",
+    )
+    print("Sucesso!" if ok else "FALHA ao enviar.")
+    sys.exit(0)
 
-if not chat_id:
-    # Tenta puxar do banco
-    from db import get_client
-    c = get_client()
-    r = c.table("user_config").select("telegram_chat_id, user_id").eq("alertas_telegram", True).limit(1).execute()
-    if r.data and r.data[0].get("telegram_chat_id"):
-        chat_id = r.data[0]["telegram_chat_id"]
-        print(f"Chat ID do banco: {chat_id}")
-    else:
-        print("ERRO: Nenhum chat_id encontrado. Passe como argumento: python test_telegram.py 123456789")
-        sys.exit(1)
+# Modo 2: testa TODOS os usuários com telegram habilitado
+from db import get_client
 
-ok = enviar_mensagem(
-    chat_id,
-    "✅ <b>Licitaê — Teste de conexão</b>\n\n"
-    "Se você está vendo esta mensagem, as notificações do Telegram estão funcionando!",
-)
+c = get_client()
+r = c.table("user_config").select(
+    "telegram_chat_id, user_id, profiles(email, nome)",
+).eq("alertas_telegram", True).execute()
 
-if ok:
-    print("Mensagem enviada com sucesso!")
-else:
-    print("FALHA ao enviar. Verifique o token e o chat_id.")
+usuarios = r.data or []
+if not usuarios:
+    print("Nenhum usuário com alertas_telegram habilitado.")
+    sys.exit(1)
+
+print(f"\n{len(usuarios)} usuário(s) com Telegram habilitado:\n")
+
+for u in usuarios:
+    profile = u.get("profiles") or {}
+    nome = profile.get("nome") or profile.get("email") or u["user_id"]
+    chat_id = u.get("telegram_chat_id") or ""
+
+    # Valida formato
+    if not chat_id or not chat_id.strip().lstrip("-").isdigit():
+        print(f"  ✗ {nome}: chat_id inválido ({chat_id!r}) — deve ser numérico")
+        continue
+
+    ok = enviar_mensagem(
+        chat_id,
+        "✅ <b>Licitaê — Teste de conexão</b>\n\n"
+        f"Olá <b>{nome}</b>! Suas notificações Telegram estão funcionando.",
+    )
+    status = "✓ enviado" if ok else "✗ FALHA"
+    print(f"  {status} — {nome} (chat_id={chat_id})")
