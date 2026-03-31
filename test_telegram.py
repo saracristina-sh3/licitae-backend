@@ -31,7 +31,7 @@ from db import get_client
 
 c = get_client()
 r = c.table("user_config").select(
-    "telegram_chat_id, user_id, profiles(email, nome)",
+    "telegram_chat_id, user_id",
 ).eq("alertas_telegram", True).execute()
 
 usuarios = r.data or []
@@ -39,10 +39,15 @@ if not usuarios:
     print("Nenhum usuário com alertas_telegram habilitado.")
     sys.exit(1)
 
+# Busca nomes dos profiles separadamente
+user_ids = [u["user_id"] for u in usuarios]
+pr = c.table("profiles").select("id, nome, email").in_("id", user_ids).execute()
+profiles_map = {p["id"]: p for p in (pr.data or [])}
+
 print(f"\n{len(usuarios)} usuário(s) com Telegram habilitado:\n")
 
 for u in usuarios:
-    profile = u.get("profiles") or {}
+    profile = profiles_map.get(u["user_id"], {})
     nome = profile.get("nome") or profile.get("email") or u["user_id"]
     chat_id = u.get("telegram_chat_id") or ""
 
