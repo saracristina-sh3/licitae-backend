@@ -46,7 +46,7 @@ def _etapa(nome: str, fn, *args, **kwargs):
         return None
 
 
-def etapa_coleta_plataformas(dias: int):
+def etapa_coleta_plataformas(dias: int, data_de: str | None = None, data_ate: str | None = None):
     """Coleta itens de todas as plataformas concorrentes."""
     from config import Config
     from item_collector import coletar_por_plataforma
@@ -57,7 +57,10 @@ def etapa_coleta_plataformas(dias: int):
     total = len(todas)
 
     log.info("Plataformas a coletar (%d): %s", total, sorted(todas))
-    log.info("Período: últimos %d dias", dias)
+    if data_de and data_ate:
+        log.info("Período: %s → %s", data_de, data_ate)
+    else:
+        log.info("Período: últimos %d dias", dias)
 
     stats_global = {"contratacoes": 0, "itens": 0, "resultados": 0, "erros": 0}
 
@@ -68,7 +71,12 @@ def etapa_coleta_plataformas(dias: int):
         inicio = time.time()
 
         try:
-            stats = coletar_por_plataforma(id_usuario=plat_id, dias=dias)
+            stats = coletar_por_plataforma(
+                id_usuario=plat_id,
+                dias=dias,
+                data_de=data_de,
+                data_ate=data_ate,
+            )
             for k in stats_global:
                 if k in stats:
                     stats_global[k] += stats[k]
@@ -156,10 +164,20 @@ def etapa_diagnostico():
 def main():
     parser = argparse.ArgumentParser(description="Pipeline completo Licitaê")
     parser.add_argument("--dias", type=int, default=30, help="Dias retroativos para coleta (default: 30)")
+    parser.add_argument("--de", type=str, default=None, help="Data inicial YYYYMMDD (ex: 20250101)")
+    parser.add_argument("--ate", type=str, default=None, help="Data final YYYYMMDD (ex: 20251231)")
     parser.add_argument("--so-comparativo", action="store_true", help="Só recalcula comparativo + preços (sem coleta)")
     parser.add_argument("--so-coleta", action="store_true", help="Só coleta dados (sem calcular)")
     parser.add_argument("--verbose", action="store_true", help="Log detalhado (DEBUG)")
     args = parser.parse_args()
+
+    # Valida datas se fornecidas
+    if (args.de and not args.ate) or (args.ate and not args.de):
+        parser.error("Use --de e --ate juntos (ex: --de 20250101 --ate 20251231)")
+    if args.de:
+        for d, nome in [(args.de, "--de"), (args.ate, "--ate")]:
+            if len(d) != 8 or not d.isdigit():
+                parser.error(f"{nome} deve ser YYYYMMDD (ex: 20250101)")
 
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
@@ -178,7 +196,7 @@ def main():
 
     if not args.so_comparativo:
         # Fase 1: Coleta de todas as plataformas
-        _etapa("Coleta de plataformas (PNCP)", etapa_coleta_plataformas, args.dias)
+        _etapa("Coleta de plataformas (PNCP)", etapa_coleta_plataformas, args.dias, args.de, args.ate)
 
         # Fase 2: Coleta pendentes e resultados
         _etapa("Coleta de itens pendentes", etapa_coleta_pendentes)

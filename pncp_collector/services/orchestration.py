@@ -235,8 +235,15 @@ def coletar_por_plataforma(
     uf: str | None = None,
     limite_paginas: int = 50,
     db_client: Any = None,
+    data_de: str | None = None,
+    data_ate: str | None = None,
 ) -> StatsPlataforma:
-    """Coleta contratações + itens diretamente por plataforma (idUsuario)."""
+    """Coleta contratações + itens diretamente por plataforma (idUsuario).
+
+    Args:
+        data_de: Data inicial no formato YYYYMMDD (sobrepõe 'dias')
+        data_ate: Data final no formato YYYYMMDD (sobrepõe 'dias')
+    """
     from config import Config
     from db import get_client
     from platform_mapper import get_plataforma_nome
@@ -250,9 +257,13 @@ def coletar_por_plataforma(
     mods = modalidades or Config.MODALIDADES
     stats_total: StatsPlataforma = {"contratacoes": 0, "itens": 0, "resultados": 0, "erros": 0}
 
-    hoje = datetime.now()
-    data_final = hoje.strftime("%Y%m%d")
-    data_inicial = (hoje - timedelta(days=dias)).strftime("%Y%m%d")
+    if data_de and data_ate:
+        data_inicial = data_de
+        data_final = data_ate
+    else:
+        hoje = datetime.now()
+        data_final = hoje.strftime("%Y%m%d")
+        data_inicial = (hoje - timedelta(days=dias)).strftime("%Y%m%d")
 
     log.info(
         "Coletando plataforma '%s' (id=%d) | período %s→%s | UF=%s",
