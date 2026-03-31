@@ -23,10 +23,12 @@ QUERIES = [
     '"locação de software"',
     '"sistema de gestão" licitação',
     '"sistema integrado" prefeitura software',
+    '"sistema integrado" gestão pública',
     '"cessão de uso" software',
     '"hospedagem de e-mails"',
     '"e-mails institucionais"',
     '"hospedagem de email"',
+    '"gestão pública"',
 ]
 
 

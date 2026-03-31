@@ -160,6 +160,104 @@ SINONIMOS: dict[str, str] = {
     "pelve": "quadril",
     "cerebral": "craniano",
     "pulmonar": "pulmao",
+    # ── Sinônimos gerados por IA (2026-03-31) ───────────────────────
+    # Utensílios de cozinha
+    "abridor": "saca",
+    "assadeira": "forma",
+    "batedor": "mixer",
+    "cafeteira": "maquina",
+    "caldeirao": "panela",
+    "caneca": "xicara",
+    "coador": "filtro",
+    "colher": "talher",
+    "concha": "talher",          # aplainado: concha→colher→talher
+    "copo": "recipiente",
+    "descascador": "cortador",
+    "espremedor": "extrator",
+    "faca": "talher",
+    "frigideira": "panela",
+    "garfo": "talher",
+    "panela": "recipiente",
+    "peneira": "filtro",         # aplainado: peneira→coador→filtro
+    "prato": "vasilha",
+    "ralador": "processador",
+    "tigela": "recipiente",
+    # Limpeza
+    "balde": "recipiente",
+    "detergente": "sabao",
+    "escova": "vassoura",        # circular resolvido: escova→vassoura
+    "esponja": "bucha",
+    "mop": "esfregao",
+    "pano": "trapo",
+    "rodo": "puxador",
+    "vassoura": "limpeza",       # circular resolvido: vassoura→limpeza
+    # Saúde / Materiais hospitalares
+    "agulha": "dispositivo",
+    "algodao": "chumaco",
+    "autoclave": "esterilizador",
+    "bandagem": "atadura",
+    "cateter": "sonda",
+    "curativo": "penso",
+    "desfibrilador": "cardioversor",
+    "estetoscopio": "fonendoscopio",
+    "gaze": "compressa",
+    "mascara": "respirador",
+    "seringa": "dispositivo",
+    "soro": "solucao",
+    # EPI / Vestuário
+    "avental": "jaleco",
+    "bota": "calcado",
+    "capacete": "casco",
+    "cinto": "faixa",
+    "colete": "vest",
+    "coturno": "calcado",        # aplainado: coturno→bota→calcado
+    "luva": "protecao",
+    "oculos": "protecao",
+    "touca": "gorro",
+    # Ferramentas
+    "alicate": "torques",
+    "broca": "furadeira",
+    "chave": "ferramenta",
+    "disjuntor": "ferramenta",   # aplainado: disjuntor→chave→ferramenta
+    "martelo": "malho",
+    "parafuso": "rosca",
+    "prego": "fixador",
+    "pincel": "trincha",
+    # Mobiliário / Escritório
+    "armario": "estante",
+    "arquivo": "gaveteiro",
+    "cadeira": "assento",
+    "cofre": "arca",
+    "colchao": "cama",
+    "cortina": "persiana",
+    "gaveta": "compartimento",
+    "luminaria": "lampada",
+    "mesa": "bancada",
+    "prateleira": "estante",
+    "quadro": "painel",
+    # Material de escritório
+    "cartucho": "toner",
+    "cola": "adesivo",
+    "envelope": "sobrecarta",
+    "etiqueta": "rotulo",
+    "fita": "adesivo",
+    "fitilho": "adesivo",       # aplainado: fitilho→fita→adesivo
+    # Elétrico / Hidráulico
+    "aquecedor": "radiador",
+    "bebedouro": "purificador",
+    "compressor": "bomba",
+    "destilador": "purificador",
+    "dispenser": "suporte",
+    "eletroduto": "conduite",
+    "extensao": "fio",           # aplainado: extensao→cabo→fio
+    "fechadura": "trinco",
+    "rolo": "cilindro",
+    "ventilador": "circulador",
+    # Veículos
+    "carrinho": "carro",
+    # Químico
+    "etilico": "alcool",
+    "tinta": "verniz",
 }
 
 # ── Grupos de unidades compatíveis ───────────────────────────────
