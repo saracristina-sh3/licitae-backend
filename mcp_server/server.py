@@ -653,6 +653,121 @@ async def consultar_pncp_direto(
 
 
 # ═════════════════════════════════════════════════════════════════
+#  TOOLS — Comparação customizada por sessão
+# ═════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def executar_comparacao_sessao(sessao_id: str) -> str:
+    """Executa comparação de preços dos itens selecionados em uma sessão.
+
+    Agrupa itens por NCM/descrição, calcula estatísticas por grupo,
+    e gera visão por item e por edital. Persiste resultados.
+    """
+    client = _get_supabase_client()
+
+    from comparison_session.services.session_comparison import comparar_itens_sessao
+    resultado = comparar_itens_sessao(client, sessao_id)
+
+    return json.dumps(resultado, ensure_ascii=False, default=str)
+
+
+@mcp.tool()
+async def analisar_comparacao_sessao(sessao_id: str) -> str:
+    """Analisa resultados de comparação de uma sessão usando IA.
+
+    Carrega os resultados por item e por edital, monta um prompt
+    estruturado e gera insights: melhor preço, fornecedores,
+    riscos e estratégia de preço sugerida.
+    """
+    client = _get_supabase_client()
+
+    from comparison_session.services.session_persistence import (
+        carregar_resultado,
+        gravar_resultado,
+    )
+
+    por_item = carregar_resultado(client, sessao_id, "por_item")
+    por_edital = carregar_resultado(client, sessao_id, "por_edital")
+
+    if not por_item and not por_edital:
+        return json.dumps({
+            "error": "Nenhum resultado encontrado. Execute a comparação primeiro.",
+        }, ensure_ascii=False)
+
+    # Montar prompt para IA
+    prompt = _montar_prompt_analise(por_item, por_edital)
+
+    # Chamar IA
+    try:
+        from ia_analysis.services.llm import chamar_llm
+        resposta = chamar_llm(prompt, modelo="claude")
+    except ImportError:
+        # Fallback se módulo de IA não disponível
+        resposta = {
+            "analise": {
+                "resumo": "Módulo de análise IA não disponível. Verifique a configuração.",
+                "por_item": [],
+                "por_edital": [],
+                "estrategia": "",
+            }
+        }
+
+    analise = resposta.get("analise", resposta)
+    gravar_resultado(client, sessao_id, "analise_ia", analise)
+
+    # Atualizar fase da sessão
+    client.table("sessoes_comparacao") \
+        .update({"fase": "analise"}) \
+        .eq("id", sessao_id) \
+        .execute()
+
+    return json.dumps(analise, ensure_ascii=False, default=str)
+
+
+def _montar_prompt_analise(por_item: list | None, por_edital: list | None) -> str:
+    """Monta prompt estruturado para análise IA dos comparativos."""
+    partes = [
+        "Analise os seguintes comparativos de preços de licitações e forneça insights em JSON.",
+        "",
+        "Retorne um JSON com os campos:",
+        '- "resumo": string com resumo executivo (2-3 parágrafos)',
+        '- "por_item": array de objetos com {descricao, recomendacao, melhor_preco, fornecedor, risco}',
+        '- "por_edital": array de objetos com {objeto, analise, oportunidade, risco}',
+        '- "estrategia": string com estratégia de preço sugerida',
+        "",
+    ]
+
+    if por_item:
+        partes.append("## Comparativo por Item")
+        for grupo in por_item[:30]:  # Limitar para não estourar tokens
+            desc = grupo.get("descricao", "?")
+            partes.append(f"\n### {desc}")
+            partes.append(f"NCM: {grupo.get('ncm', 'N/A')} | Unidade: {grupo.get('unidade_predominante', '?')}")
+            for plat in grupo.get("plataformas", []):
+                nome = plat.get("plataforma_nome", "?")
+                valor = plat.get("valor_medio", 0)
+                eco = plat.get("economia_media")
+                eco_str = f" (economia {eco}%)" if eco else ""
+                partes.append(f"  - {nome}: R$ {valor:.2f}{eco_str}")
+
+    if por_edital:
+        partes.append("\n## Comparativo por Edital")
+        for edital in por_edital[:20]:
+            obj = edital.get("objeto", "?")
+            mun = edital.get("municipio", "?")
+            est = edital.get("valor_estimado", 0)
+            hom = edital.get("valor_homologado", 0)
+            eco = edital.get("economia")
+            partes.append(f"\n### {obj}")
+            partes.append(f"Local: {mun} | Itens: {edital.get('total_itens', 0)}")
+            partes.append(f"Estimado: R$ {est:.2f} | Homologado: R$ {hom:.2f}")
+            if eco is not None:
+                partes.append(f"Economia: {eco}%")
+
+    return "\n".join(partes)
+
+
+# ═════════════════════════════════════════════════════════════════
 #  Entry point
 # ═════════════════════════════════════════════════════════════════
 
@@ -734,12 +849,52 @@ async def _run_sse_with_auth(port: int) -> None:
             log.error("Erro na análise IA: %s", e, exc_info=True)
             return JSONResponse({"error": "Erro interno na análise"}, status_code=500)
 
+    async def handle_comparacao_sessao(request):
+        """Endpoint REST para comparação customizada por sessão."""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "JSON inválido"}, status_code=400)
+
+        sessao_id = body.get("sessao_id")
+        if not sessao_id:
+            return JSONResponse({"error": "sessao_id é obrigatório"}, status_code=400)
+
+        try:
+            client = _get_supabase_client()
+            from comparison_session.services.session_comparison import comparar_itens_sessao
+            resultado = comparar_itens_sessao(client, sessao_id)
+            return JSONResponse({"ok": True, **resultado})
+        except Exception as e:
+            log.error("Erro na comparação de sessão: %s", e, exc_info=True)
+            return JSONResponse({"error": "Erro interno na comparação"}, status_code=500)
+
+    async def handle_analise_sessao(request):
+        """Endpoint REST para análise IA de sessão."""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "JSON inválido"}, status_code=400)
+
+        sessao_id = body.get("sessao_id")
+        if not sessao_id:
+            return JSONResponse({"error": "sessao_id é obrigatório"}, status_code=400)
+
+        try:
+            resultado = await analisar_comparacao_sessao(sessao_id)
+            return JSONResponse(json.loads(resultado))
+        except Exception as e:
+            log.error("Erro na análise IA de sessão: %s", e, exc_info=True)
+            return JSONResponse({"error": "Erro interno na análise"}, status_code=500)
+
     app = Starlette(
         routes=[
             Route("/health", health),
             Route("/sse", endpoint=handle_sse),
             Route("/messages/", endpoint=handle_messages, methods=["POST"]),
             Route("/api/analise-ia", endpoint=handle_analise_ia, methods=["POST"]),
+            Route("/api/comparacao-sessao", endpoint=handle_comparacao_sessao, methods=["POST"]),
+            Route("/api/analise-sessao", endpoint=handle_analise_sessao, methods=["POST"]),
         ],
         middleware=[Middleware(AuthMiddleware)],
     )
