@@ -94,9 +94,10 @@ def verificar_prazos():
     total_criados = len(result.data) if result.data else 0
     log.info("Alertas de prazo criados: %d", total_criados)
 
-    # Envia emails agrupados por usuário
+    # Envia notificações agrupadas por usuário
     if total_criados > 0:
         _enviar_emails_prazo(client, alertas_para_inserir)
+        _enviar_telegram_prazo(client, alertas_para_inserir)
 
     return {"verificadas": len(oportunidades), "alertas_criados": total_criados}
 
@@ -211,6 +212,81 @@ def _enviar_email_prazo(destinatario: str, alertas: list[dict], lics_map: dict):
         log.info("Email de prazo enviado para: %s (%d alertas)", destinatario, len(alertas))
     except Exception as e:
         log.error("Erro ao enviar email de prazo para %s: %s", destinatario, e)
+
+
+def _enviar_telegram_prazo(client, alertas: list[dict]):
+    """Envia alertas de prazo via Telegram para usuários que habilitaram."""
+    from telegram_client import enviar_mensagem
+
+    if not Config.TELEGRAM_BOT_TOKEN:
+        return
+
+    # Agrupa por user_id
+    por_usuario: dict[str, list[dict]] = {}
+    for alerta in alertas:
+        uid = alerta["user_id"]
+        por_usuario.setdefault(uid, []).append(alerta)
+
+    for user_id, user_alertas in por_usuario.items():
+        # Verifica se usuário habilitou Telegram
+        try:
+            uc = client.table("user_config").select(
+                "alertas_telegram, telegram_chat_id"
+            ).eq("user_id", user_id).single().execute()
+
+            if not uc.data or not uc.data.get("alertas_telegram") or not uc.data.get("telegram_chat_id"):
+                continue
+
+            chat_id = uc.data["telegram_chat_id"]
+        except Exception:
+            continue
+
+        # Busca dados das licitações
+        lic_ids = list({a["licitacao_id"] for a in user_alertas})
+        lics_result = client.table("licitacoes").select(
+            "id, municipio_nome, uf, objeto"
+        ).in_("id", lic_ids).execute()
+        lics_map = {l["id"]: l for l in (lics_result.data or [])}
+
+        # Monta mensagem
+        linhas = []
+        for a in sorted(user_alertas, key=lambda x: x["dias_restantes"]):
+            lic = lics_map.get(a["licitacao_id"], {})
+            municipio = f"{lic.get('municipio_nome', '?')}/{lic.get('uf', '?')}"
+            objeto = (lic.get("objeto") or "")[:80]
+            tipo = "Prazo interno" if a["tipo"] == "prazo_interno" else "Encerramento"
+
+            if a["dias_restantes"] == 0:
+                emoji = "🔴"
+                urgencia = "HOJE"
+            elif a["dias_restantes"] == 1:
+                emoji = "🟡"
+                urgencia = "AMANHÃ"
+            else:
+                emoji = "🔵"
+                urgencia = f"em {a['dias_restantes']} dias"
+
+            linhas.append(f"{emoji} <b>{urgencia}</b> — {municipio}\n    {tipo} | {objeto}")
+
+        texto = (
+            f"⏰ <b>Licitaê — {len(user_alertas)} prazo(s) próximo(s)</b>\n\n"
+            + "\n\n".join(linhas)
+        )
+
+        if enviar_mensagem(chat_id, texto):
+            # Registra envio
+            for a in user_alertas:
+                try:
+                    client.table("alertas_enviados").insert({
+                        "licitacao_id": a["licitacao_id"],
+                        "user_id": user_id,
+                        "canal": "telegram",
+                        "destinatario": chat_id,
+                    }).execute()
+                except Exception:
+                    pass
+
+            log.info("Telegram de prazo enviado para chat_id=%s (%d alertas)", chat_id, len(user_alertas))
 
 
 if __name__ == "__main__":

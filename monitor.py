@@ -126,11 +126,14 @@ def verificar_mudancas():
                 })
                 snapshot_update["ultimo_proposta_aberta"] = nova_proposta_aberta
 
-        # Grava alertas e atualiza snapshot
+        # Grava alertas e notifica
         if alertas:
             log.info("Monitoramento %d: %d mudança(s) detectada(s)", mon["id"], len(alertas))
             client.table("monitoramento_alertas").insert(alertas).execute()
             total_mudancas += len(alertas)
+
+            # Envia Telegram se habilitado
+            _notificar_mudanca_telegram(client, mon["user_id"], mon["licitacao_id"], alertas, lic)
 
             # Atualiza licitação no banco com dados novos
             lic_update = {}
@@ -151,6 +154,59 @@ def verificar_mudancas():
 
     log.info("Verificação concluída: %d licitações, %d mudanças", len(monitoramentos), total_mudancas)
     return {"verificadas": len(monitoramentos), "mudancas": total_mudancas}
+
+
+def _notificar_mudanca_telegram(client, user_id: str, licitacao_id: str, alertas: list[dict], lic: dict):
+    """Envia notificação de mudança via Telegram se o usuário habilitou."""
+    from config import Config
+
+    if not Config.TELEGRAM_BOT_TOKEN:
+        return
+
+    try:
+        uc = client.table("user_config").select(
+            "alertas_telegram, telegram_chat_id"
+        ).eq("user_id", user_id).single().execute()
+
+        if not uc.data or not uc.data.get("alertas_telegram") or not uc.data.get("telegram_chat_id"):
+            return
+
+        chat_id = uc.data["telegram_chat_id"]
+    except Exception:
+        return
+
+    municipio = f"{lic.get('municipio_nome', '?')}/{lic.get('uf', '?')}"
+    objeto = (lic.get("objeto") or "")[:80]
+
+    mudancas = []
+    for a in alertas:
+        campo = a["campo"]
+        anterior = a["valor_anterior"] or "—"
+        novo = a["valor_novo"] or "—"
+        mudancas.append(f"  • <b>{campo}</b>: {anterior} → {novo}")
+
+    texto = (
+        f"🔔 <b>Licitaê — Mudança detectada</b>\n\n"
+        f"📍 {municipio}\n"
+        f"📄 {objeto}\n\n"
+        f"<b>Alterações:</b>\n"
+        + "\n".join(mudancas)
+    )
+
+    from telegram_client import enviar_mensagem
+
+    if enviar_mensagem(chat_id, texto):
+        try:
+            client.table("alertas_enviados").insert({
+                "licitacao_id": licitacao_id,
+                "user_id": user_id,
+                "canal": "telegram",
+                "destinatario": chat_id,
+            }).execute()
+        except Exception:
+            pass
+
+        log.info("Telegram de mudança enviado para chat_id=%s", chat_id)
 
 
 if __name__ == "__main__":

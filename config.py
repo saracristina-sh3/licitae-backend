@@ -52,6 +52,9 @@ class Config:
     # PNCP API (compras — itens e resultados)
     PNCP_COMPRAS_URL = "https://pncp.gov.br/api/pncp"
 
+    # Telegram
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
     # Plataformas-alvo para coleta de itens (idUsuario PNCP)
     PLATAFORMAS_ALVO = [
         int(x) for x in os.getenv(

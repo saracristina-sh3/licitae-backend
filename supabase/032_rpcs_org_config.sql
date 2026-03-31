@@ -67,12 +67,15 @@ $$;
 
 -- 2. buscar_licitacoes_filtradas
 CREATE OR REPLACE FUNCTION buscar_licitacoes_filtradas(
-    p_uf TEXT DEFAULT NULL,
+    p_ufs TEXT[] DEFAULT NULL,
     p_relevancia TEXT DEFAULT NULL,
     p_proposta_aberta BOOLEAN DEFAULT NULL,
     p_exclusivo_me_epp BOOLEAN DEFAULT NULL,
     p_busca TEXT DEFAULT NULL,
     p_palavra_chave TEXT DEFAULT NULL,
+    p_modalidade_id INTEGER DEFAULT NULL,
+    p_modo_disputa_id INTEGER DEFAULT NULL,
+    p_situacao_compra_id INTEGER DEFAULT NULL,
     p_ordenar_por TEXT DEFAULT 'relevancia',
     p_limite INT DEFAULT 20,
     p_offset INT DEFAULT 0
@@ -82,6 +85,7 @@ LANGUAGE plpgsql SECURITY DEFINER
 AS $$
 DECLARE
     v_org_id UUID;
+    v_user_id UUID;
     v_modalidades INTEGER[];
     v_termos_exclusao TEXT[];
     v_org_dom_modalidades INTEGER[];
@@ -91,9 +95,11 @@ DECLARE
     v_count INT;
     v_modalidade_nomes TEXT[];
 BEGIN
-    -- 1. Busca org do usuário
+    -- 1. Busca org e user
+    v_user_id := auth.uid();
+
     SELECT p.org_id INTO v_org_id
-    FROM profiles p WHERE p.id = auth.uid();
+    FROM profiles p WHERE p.id = v_user_id;
 
     IF v_org_id IS NULL THEN
         RETURN json_build_object('data', '[]'::json, 'count', 0);
@@ -114,26 +120,35 @@ BEGIN
     END IF;
 
     -- 4. Monta filtros
-    IF p_uf IS NOT NULL THEN
-        v_where := v_where || ' AND uf = ' || quote_literal(p_uf);
+    IF p_ufs IS NOT NULL AND array_length(p_ufs, 1) > 0 THEN
+        v_where := v_where || ' AND l.uf = ANY(' || quote_literal(p_ufs)::text || '::text[])';
     END IF;
     IF p_relevancia IS NOT NULL THEN
-        v_where := v_where || ' AND relevancia = ' || quote_literal(p_relevancia);
+        v_where := v_where || ' AND l.relevancia = ' || quote_literal(p_relevancia);
     END IF;
     IF p_proposta_aberta IS NOT NULL THEN
-        v_where := v_where || ' AND proposta_aberta = ' || p_proposta_aberta;
+        v_where := v_where || ' AND l.proposta_aberta = ' || p_proposta_aberta;
     END IF;
     IF p_exclusivo_me_epp IS TRUE THEN
-        v_where := v_where || ' AND exclusivo_me_epp = true';
+        v_where := v_where || ' AND l.exclusivo_me_epp = true';
     END IF;
     IF p_busca IS NOT NULL AND p_busca != '' THEN
-        v_where := v_where || ' AND objeto ILIKE ' || quote_literal('%' || p_busca || '%');
+        v_where := v_where || ' AND l.objeto ILIKE ' || quote_literal('%' || p_busca || '%');
     END IF;
     IF p_palavra_chave IS NOT NULL AND p_palavra_chave != '' THEN
-        v_where := v_where || ' AND ' || quote_literal(p_palavra_chave) || ' = ANY(palavras_chave)';
+        v_where := v_where || ' AND ' || quote_literal(p_palavra_chave) || ' = ANY(l.palavras_chave)';
+    END IF;
+    IF p_modalidade_id IS NOT NULL AND p_modalidade_id > 0 THEN
+        v_where := v_where || ' AND l.modalidade_id = ' || p_modalidade_id;
+    END IF;
+    IF p_modo_disputa_id IS NOT NULL AND p_modo_disputa_id > 0 THEN
+        v_where := v_where || ' AND l.modo_disputa_id = ' || p_modo_disputa_id;
+    END IF;
+    IF p_situacao_compra_id IS NOT NULL AND p_situacao_compra_id > 0 THEN
+        v_where := v_where || ' AND l.situacao_compra_id = ' || p_situacao_compra_id;
     END IF;
 
-    -- 5. Filtra por modalidades
+    -- 5. Filtra por modalidades da org (fallback)
     IF v_modalidades IS NOT NULL AND array_length(v_modalidades, 1) > 0 THEN
         SELECT array_agg(d.nome) INTO v_modalidade_nomes
         FROM dominios_pncp d
@@ -141,32 +156,36 @@ BEGIN
           AND d.codigo = ANY(v_modalidades);
 
         IF v_modalidade_nomes IS NOT NULL AND array_length(v_modalidade_nomes, 1) > 0 THEN
-            v_where := v_where || ' AND modalidade = ANY(' || quote_literal(v_modalidade_nomes)::text || '::text[])';
+            v_where := v_where || ' AND l.modalidade = ANY(' || quote_literal(v_modalidade_nomes)::text || '::text[])';
         END IF;
     END IF;
 
     -- 6. Aplica termos de exclusão
     IF v_termos_exclusao IS NOT NULL AND array_length(v_termos_exclusao, 1) > 0 THEN
         FOR i IN 1..array_length(v_termos_exclusao, 1) LOOP
-            v_where := v_where || ' AND lower(objeto) NOT LIKE ' || quote_literal('%' || lower(v_termos_exclusao[i]) || '%');
+            v_where := v_where || ' AND lower(l.objeto) NOT LIKE ' || quote_literal('%' || lower(v_termos_exclusao[i]) || '%');
         END LOOP;
     END IF;
 
     -- 7. Ordenação
     CASE p_ordenar_por
-        WHEN 'data_publicacao' THEN v_order := 'data_publicacao DESC';
-        WHEN 'valor_estimado' THEN v_order := 'valor_estimado DESC';
-        WHEN 'municipio_nome' THEN v_order := 'municipio_nome ASC, data_publicacao DESC';
-        WHEN 'score' THEN v_order := 'score DESC NULLS LAST, data_publicacao DESC';
-        ELSE v_order := 'relevancia ASC, data_publicacao DESC';
+        WHEN 'data_publicacao' THEN v_order := 'l.data_publicacao DESC';
+        WHEN 'valor_estimado' THEN v_order := 'l.valor_estimado DESC';
+        WHEN 'municipio_nome' THEN v_order := 'l.municipio_nome ASC, l.data_publicacao DESC';
+        WHEN 'score' THEN v_order := 'l.score DESC NULLS LAST, l.data_publicacao DESC';
+        ELSE v_order := 'l.relevancia ASC, l.data_publicacao DESC';
     END CASE;
 
     -- 8. Count
-    EXECUTE 'SELECT count(*) FROM licitacoes ' || v_where INTO v_count;
+    EXECUTE 'SELECT count(*) FROM licitacoes l ' || v_where INTO v_count;
 
-    -- 9. Busca paginada
-    EXECUTE 'SELECT json_agg(t) FROM (SELECT * FROM licitacoes '
-        || v_where || ' ORDER BY ' || v_order
+    -- 9. Busca paginada com status de leitura
+    EXECUTE 'SELECT json_agg(t) FROM ('
+        || 'SELECT l.*, (ll.lido_em IS NOT NULL) AS lido '
+        || 'FROM licitacoes l '
+        || 'LEFT JOIN licitacoes_leitura ll ON ll.licitacao_id = l.id AND ll.user_id = ' || quote_literal(v_user_id)
+        || ' ' || v_where
+        || ' ORDER BY ' || v_order
         || ' LIMIT $1 OFFSET $2) t'
     INTO v_result
     USING p_limite, p_offset;
