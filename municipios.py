@@ -1,7 +1,6 @@
 """
-Carrega municípios de MG e RJ com FPM até 2.8 (população até ~91.692 hab)
-via API do IBGE — busca em lote (1 request por UF, não por município).
-Cache local com TTL de 30 dias.
+Carrega municípios e microrregiões via API do IBGE.
+Busca em lote (1 request por UF). Cache local com TTL de 30 dias.
 """
 
 import json
@@ -17,6 +16,7 @@ log = logging.getLogger(__name__)
 
 CACHE_DIR = os.environ.get("CACHE_DIR", os.path.dirname(__file__))
 CACHE_FILE = os.path.join(CACHE_DIR, "municipios.json")
+CACHE_MICRORREGIOES_FILE = os.path.join(CACHE_DIR, "microrregioes.json")
 CACHE_TTL_DIAS = 30
 
 UF_CODES = {
@@ -146,6 +146,138 @@ def codigos_ibge_municipios(ufs: list[str], populacao_maxima: int) -> list[str]:
     return [m["codigo_ibge"] for m in carregar_municipios(ufs, populacao_maxima)]
 
 
+# ---------------------------------------------------------------------------
+# Microrregiões IBGE
+# ---------------------------------------------------------------------------
+
+
+def _cache_microrregioes_expirado() -> bool:
+    if not os.path.exists(CACHE_MICRORREGIOES_FILE):
+        return True
+    idade = time.time() - os.path.getmtime(CACHE_MICRORREGIOES_FILE)
+    return idade > CACHE_TTL_DIAS * 86400
+
+
+def _fetch_microrregioes_uf(uf_code: str) -> list[dict]:
+    """Busca microrregiões de uma UF via API IBGE."""
+    url = f"https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf_code}/microrregioes"
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _fetch_municipios_microrregiao(microrregiao_id: int) -> list[dict]:
+    """Busca municípios de uma microrregião via API IBGE."""
+    url = f"https://servicodados.ibge.gov.br/api/v1/localidades/microrregioes/{microrregiao_id}/municipios"
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def carregar_microrregioes(ufs: list[str]) -> list[dict]:
+    """
+    Carrega microrregiões de todas as UFs solicitadas.
+    Retorna lista de dicts com id, nome, mesorregiao_id, mesorregiao_nome, uf.
+    Usa cache local com TTL de 30 dias.
+    """
+    # Verificar cache
+    if os.path.exists(CACHE_MICRORREGIOES_FILE) and not _cache_microrregioes_expirado():
+        with open(CACHE_MICRORREGIOES_FILE, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+            ufs_no_cache = {m["uf"] for m in cached}
+            ufs_faltando = set(ufs) - ufs_no_cache
+            if not ufs_faltando:
+                return [m for m in cached if m["uf"] in ufs]
+            log.info("Cache microrregiões não contém UFs %s, recarregando...", ", ".join(sorted(ufs_faltando)))
+
+    log.info("Carregando microrregiões do IBGE...")
+
+    # Manter cache existente para UFs não rebuscadas
+    todos: list[dict] = []
+    if os.path.exists(CACHE_MICRORREGIOES_FILE):
+        with open(CACHE_MICRORREGIOES_FILE, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+            todos = [m for m in cached if m["uf"] not in ufs]
+
+    for uf in ufs:
+        uf_code = UF_CODES.get(uf)
+        if not uf_code:
+            log.warning("UF não suportada: %s", uf)
+            continue
+
+        log.info("  %s: buscando microrregiões...", uf)
+        raw = _fetch_microrregioes_uf(uf_code)
+
+        for micro in raw:
+            meso = micro.get("mesorregiao", {})
+            todos.append({
+                "id": micro["id"],
+                "nome": micro["nome"],
+                "mesorregiao_id": meso.get("id", 0),
+                "mesorregiao_nome": meso.get("nome", ""),
+                "uf": uf,
+            })
+
+        log.info("  %s: %d microrregiões", uf, len(raw))
+
+    # Salvar cache
+    os.makedirs(os.path.dirname(CACHE_MICRORREGIOES_FILE) or ".", exist_ok=True)
+    with open(CACHE_MICRORREGIOES_FILE, "w", encoding="utf-8") as f:
+        json.dump(todos, f, ensure_ascii=False, indent=2)
+
+    log.info("Cache microrregiões salvo em %s", CACHE_MICRORREGIOES_FILE)
+    return [m for m in todos if m["uf"] in ufs]
+
+
+def mapear_municipios_por_microrregiao(microrregioes_ids: list[int]) -> dict[str, int]:
+    """
+    Dado uma lista de IDs de microrregiões, retorna mapeamento
+    codigo_ibge -> microrregiao_id para todos os municípios dessas microrregiões.
+    """
+    mapa: dict[str, int] = {}
+    for micro_id in microrregioes_ids:
+        try:
+            municipios = _fetch_municipios_microrregiao(micro_id)
+            for mun in municipios:
+                mapa[str(mun["id"])] = micro_id
+        except Exception as exc:
+            log.warning("Falha ao buscar municípios da microrregião %d: %s", micro_id, exc)
+    return mapa
+
+
+def vincular_municipios_microrregioes(
+    municipios: list[dict], microrregioes: list[dict], ufs: list[str]
+) -> list[dict]:
+    """
+    Enriquece municipios com microrregiao_id usando a API IBGE.
+    Busca municípios por microrregião para cada UF solicitada.
+    """
+    # Coletar todos os IDs de microrregiões das UFs
+    micro_ids = [m["id"] for m in microrregioes if m["uf"] in ufs]
+    if not micro_ids:
+        return municipios
+
+    mapa = mapear_municipios_por_microrregiao(micro_ids)
+
+    for mun in municipios:
+        micro_id = mapa.get(mun["codigo_ibge"])
+        if micro_id:
+            mun["microrregiao_id"] = micro_id
+
+    return municipios
+
+
+def filtrar_por_microrregioes(
+    municipios: list[dict], microrregioes_ids: list[int]
+) -> list[dict]:
+    """Filtra municípios que pertencem às microrregiões informadas."""
+    if not microrregioes_ids:
+        return municipios
+
+    ids_set = set(microrregioes_ids)
+    return [m for m in municipios if m.get("microrregiao_id") in ids_set]
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     from config import Config
@@ -155,6 +287,9 @@ if __name__ == "__main__":
     for uf in Config.UFS:
         count = len([m for m in munis if m["uf"] == uf])
         log.info("  %s: %d municípios", uf, count)
-    log.info("Exemplos:")
-    for m in munis[:5]:
-        log.info("  %s/%s - Pop: %s - FPM: %s", m["nome"], m["uf"], f"{m['populacao']:,}", m["fpm"])
+
+    # Testar microrregiões
+    micros = carregar_microrregioes(["MG"])
+    log.info("Microrregiões MG: %d", len(micros))
+    for m in micros[:3]:
+        log.info("  %s (id=%d) — %s", m["nome"], m["id"], m["mesorregiao_nome"])

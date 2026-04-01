@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """
-Licitações de Software - Buscador PNCP + Supabase
-Busca licitações de permissão de uso de software em municípios
-de MG e RJ com FPM até 2.8.
+Licitaê - Plataforma de Inteligência em Licitações
+
+Pipeline:
+1. COLETA GENÉRICA: busca todas as licitações do PNCP (sem filtro de keywords)
+2. COLETA DE ITENS: busca itens/resultados das licitações coletadas
+3. PROSPECÇÃO POR ORG: aplica keywords/filtros de cada organização
 
 Uso:
-    python main.py                  # Busca últimos 7 dias
-    python main.py --dias 30        # Busca últimos 30 dias
+    python main.py                  # Coleta + prospecção (últimos 7 dias)
+    python main.py --dias 30        # Últimos 30 dias
     python main.py --de 20260301 --ate 20260321
-    python main.py --sem-email      # Só gera planilha
-    python main.py --sem-supabase   # Não grava no Supabase
-    python main.py --agendar        # Roda semanalmente
-    python main.py --sync-municipios # Sincroniza municípios no Supabase
-    python main.py --dry-run        # Simula busca sem gravar
+    python main.py --sem-email      # Não enviar email
+    python main.py --sem-supabase   # Não gravar no Supabase
+    python main.py --agendar        # Roda automaticamente
+    python main.py --sync-municipios # Sincroniza municípios + microrregiões
+    python main.py --dry-run        # Simula sem gravar
+    python main.py --prospectar     # Roda apenas prospecção por org
 """
 
 from __future__ import annotations
@@ -26,7 +30,6 @@ from datetime import datetime, timedelta
 import schedule
 
 from config import Config
-from search import buscar_licitacoes
 from reports import gerar_excel, enviar_email
 
 log = logging.getLogger(__name__)
@@ -46,12 +49,12 @@ def _supabase_disponivel() -> bool:
 
 
 def sync_municipios():
-    """Sincroniza municípios do IBGE no Supabase.
+    """Sincroniza municípios e microrregiões do IBGE no Supabase.
 
     Lê UFs de todas as org_configs para trazer tudo que as orgs precisam.
     """
-    from municipios import carregar_municipios
-    from db import sync_municipios as db_sync
+    from municipios import carregar_municipios, carregar_microrregioes, vincular_municipios_microrregioes
+    from db import sync_municipios as db_sync, sync_microrregioes as db_sync_micro
     from user_configs import carregar_configs_org, unificar_configs
 
     configs = carregar_configs_org()
@@ -59,14 +62,140 @@ def sync_municipios():
     ufs_sync = busca_config.get("ufs") or Config.UFS
     fpm_max = busca_config.get("fpm_maximo") or Config.POPULACAO_MAXIMA
 
+    # 1. Sincronizar microrregiões
+    log.info("Sincronizando microrregiões de %d UFs...", len(ufs_sync))
+    micros = carregar_microrregioes(ufs_sync)
+    count_micro = db_sync_micro(micros)
+    log.info("Microrregiões sincronizadas: %d", count_micro)
+
+    # 2. Sincronizar municípios (com vínculo de microrregião)
     log.info("Sincronizando municípios de %d UFs no Supabase...", len(ufs_sync))
     munis = carregar_municipios(ufs_sync, fpm_max)
+    munis = vincular_municipios_microrregioes(munis, micros, ufs_sync)
     count = db_sync(munis)
     log.info("Municípios sincronizados: %d", count)
     for uf in sorted(ufs_sync):
         c = len([m for m in munis if m["uf"] == uf])
         if c > 0:
             log.info("  %s: %d", uf, c)
+
+
+def executar_coleta(
+    dias: int | None = None,
+    data_de: str | None = None,
+    data_ate: str | None = None,
+    sem_supabase: bool = False,
+    dry_run: bool = False,
+) -> list[dict]:
+    """
+    Executa coleta genérica de licitações (sem filtro de keywords).
+    Persiste no banco para posterior prospecção por org.
+    """
+    log.info("=" * 60)
+    log.info("COLETA GENÉRICA DE LICITAÇÕES%s", " (DRY RUN)" if dry_run else "")
+    log.info("Execução: %s", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    log.info("=" * 60)
+
+    from user_configs import carregar_configs_org, unificar_configs
+    from prospection_engine.services.collection import coletar_licitacoes
+
+    configs = carregar_configs_org()
+    coleta_config = unificar_configs(configs)
+    log.info("Configs carregadas: %d organização(ões)", len(configs))
+    log.info("  UFs: %s", ", ".join(coleta_config["ufs"]))
+    log.info("  Fontes: %s", ", ".join(coleta_config["fontes"]))
+
+    resultados: list[dict] = []
+
+    # Coleta PNCP (genérica, sem keywords)
+    if "PNCP" in coleta_config["fontes"]:
+        pncp = coletar_licitacoes(
+            ufs=coleta_config["ufs"],
+            modalidades=coleta_config["modalidades"],
+            fpm_maximo=coleta_config["fpm_maximo"],
+            dias_retroativos=dias,
+            data_inicial=data_de,
+            data_final=data_ate,
+        )
+        resultados.extend(pncp)
+        log.info("PNCP: %d licitações coletadas", len(pncp))
+
+    # Coleta Querido Diário
+    if "QUERIDO_DIARIO" in coleta_config["fontes"]:
+        if data_de and data_ate:
+            dt_inicio, dt_fim = data_de, data_ate
+        else:
+            d = dias or Config.DIAS_RETROATIVOS
+            hoje = datetime.now()
+            inicio = hoje - timedelta(days=d)
+            dt_inicio = inicio.strftime("%Y%m%d")
+            dt_fim = hoje.strftime("%Y%m%d")
+        try:
+            from scrapers.querido_diario import buscar_querido_diario
+            qd = buscar_querido_diario(dt_inicio, dt_fim)
+            resultados.extend(qd)
+            log.info("Querido Diário: %d resultados", len(qd))
+        except Exception as e:
+            log.error("Querido Diário: erro - %s", e)
+
+    # Coleta TCE-RJ
+    if "TCE_RJ" in coleta_config["fontes"] and "RJ" in coleta_config["ufs"]:
+        if data_de and data_ate:
+            dt_inicio, dt_fim = data_de, data_ate
+        else:
+            d = dias or Config.DIAS_RETROATIVOS
+            hoje = datetime.now()
+            inicio = hoje - timedelta(days=d)
+            dt_inicio = inicio.strftime("%Y%m%d")
+            dt_fim = hoje.strftime("%Y%m%d")
+        try:
+            from scrapers.tcerj import buscar_tcerj
+            tcerj = buscar_tcerj(dt_inicio, dt_fim)
+            resultados.extend(tcerj)
+            log.info("TCE-RJ: %d resultados", len(tcerj))
+        except Exception as e:
+            log.error("TCE-RJ: erro - %s", e)
+
+    log.info("Total coletado: %d (todas as fontes)", len(resultados))
+
+    if dry_run:
+        log.info("DRY RUN — não gravou no Supabase")
+        return resultados
+
+    # Grava no Supabase (sem score/relevância)
+    usar_supabase = not sem_supabase and _supabase_disponivel()
+    if usar_supabase and resultados:
+        from db import inserir_licitacoes_generica
+        stats = inserir_licitacoes_generica(resultados)
+        log.info("  Inseridas: %d | Duplicadas: %d | Erros: %d",
+                 stats["inseridas"], stats["duplicadas"], stats["erros"])
+
+    log.info("Coleta concluída!")
+    return resultados
+
+
+def executar_prospeccao(dias: int | None = None, sem_email: bool = False):
+    """
+    Executa prospecção para todas as organizações.
+    Aplica keywords/filtros de cada org sobre as licitações já coletadas.
+    """
+    log.info("=" * 60)
+    log.info("PROSPECÇÃO POR ORGANIZAÇÃO")
+    log.info("=" * 60)
+
+    from prospection_engine.services.prospection import prospectar_todas_orgs
+    d = dias or Config.DIAS_RETROATIVOS
+    resultados = prospectar_todas_orgs(dias_retroativos=d)
+
+    for r in resultados:
+        log.info(
+            "  Org %s: %d oportunidades (ALTA=%d, MEDIA=%d, BAIXA=%d)",
+            r["org_id"], r["total"], r["alta"], r["media"], r["baixa"],
+        )
+
+    log.info("=" * 60)
+    log.info("Prospecção concluída!")
+    return resultados
 
 
 def executar_busca(
@@ -77,111 +206,24 @@ def executar_busca(
     sem_supabase: bool = False,
     dry_run: bool = False,
 ):
-    """Executa uma busca completa, grava no Supabase e gera relatórios."""
-    log.info("=" * 60)
-    log.info("BUSCADOR DE LICITAÇÕES%s", " (DRY RUN)" if dry_run else "")
-    log.info("Execução: %s", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    log.info("=" * 60)
-
-    # Carrega configurações das organizações
-    from user_configs import carregar_configs_org, unificar_configs
-    configs = carregar_configs_org()
-    busca_config = unificar_configs(configs)
-    log.info("Configs carregadas: %d organização(ões)", len(configs))
-    log.info("  UFs: %s", ", ".join(busca_config["ufs"]))
-    log.info("  Palavras-chave: %d termos", len(busca_config["palavras_chave"]))
-    log.info("  Fontes: %s", ", ".join(busca_config["fontes"]))
-
-    # Datas
-    if data_de and data_ate:
-        dt_inicio = data_de
-        dt_fim = data_ate
-    else:
-        d = dias or Config.DIAS_RETROATIVOS
-        hoje = datetime.now()
-        inicio = hoje - timedelta(days=d)
-        dt_inicio = inicio.strftime("%Y%m%d")
-        dt_fim = hoje.strftime("%Y%m%d")
-
-    resultados = []
-
-    # Busca PNCP
-    if "PNCP" in busca_config["fontes"]:
-        pncp = buscar_licitacoes(
-            dias_retroativos=dias,
-            data_inicial=data_de,
-            data_final=data_ate,
-            busca_config=busca_config,
-        )
-        resultados.extend(pncp)
-        log.info("PNCP: %d resultados", len(pncp))
-    else:
-        log.info("PNCP: desativado")
-
-    # Busca Querido Diário
-    if "QUERIDO_DIARIO" in busca_config["fontes"]:
-        try:
-            from scrapers.querido_diario import buscar_querido_diario
-            log.info("Buscando no Querido Diário...")
-            qd = buscar_querido_diario(dt_inicio, dt_fim)
-            resultados.extend(qd)
-            log.info("Querido Diário: %d resultados", len(qd))
-        except Exception as e:
-            log.error("Querido Diário: erro - %s", e)
-    else:
-        log.info("Querido Diário: desativado")
-
-    # Busca TCE-RJ
-    if "TCE_RJ" in busca_config["fontes"] and "RJ" in busca_config["ufs"]:
-        try:
-            from scrapers.tcerj import buscar_tcerj
-            log.info("Buscando no TCE-RJ...")
-            tcerj = buscar_tcerj(dt_inicio, dt_fim)
-            resultados.extend(tcerj)
-            log.info("TCE-RJ: %d resultados", len(tcerj))
-        except Exception as e:
-            log.error("TCE-RJ: erro - %s", e)
-    else:
-        log.info("TCE-RJ: desativado")
-
-    log.info("=" * 60)
-    log.info("Total encontrado: %d (todas as fontes)", len(resultados))
-
-    if resultados:
-        alta = len([r for r in resultados if r["relevancia"] == "ALTA"])
-        media = len([r for r in resultados if r["relevancia"] == "MEDIA"])
-        baixa = len([r for r in resultados if r["relevancia"] == "BAIXA"])
-        valor = sum(r["valor_estimado"] for r in resultados)
-        log.info("  ALTA: %d | MÉDIA: %d | BAIXA: %d", alta, media, baixa)
-        log.info("  Valor total estimado: R$ %s", f"{valor:,.2f}")
+    """Pipeline completo: coleta genérica → coleta de itens → prospecção por org."""
+    # Fase 1: Coleta genérica
+    resultados = executar_coleta(
+        dias=dias, data_de=data_de, data_ate=data_ate,
+        sem_supabase=sem_supabase, dry_run=dry_run,
+    )
 
     if dry_run:
-        log.info("DRY RUN — não gravou no Supabase, não enviou email, não gerou Excel")
         return resultados
 
-    # Grava no Supabase
-    usar_supabase = not sem_supabase and _supabase_disponivel()
-    if usar_supabase and resultados:
-        from db import inserir_licitacoes
+    # Fase 2: Coleta de itens das novas licitações
+    if _supabase_disponivel():
+        executar_coleta_itens(limite=len(resultados) or 100)
 
-        log.info("Gravando no Supabase...")
-        stats = inserir_licitacoes(resultados)
-        log.info("  Inseridas: %d | Duplicadas: %d | Erros: %d",
-                 stats["inseridas"], stats["duplicadas"], stats["erros"])
-    elif not usar_supabase:
-        log.info("Supabase não configurado, pulando gravação")
+    # Fase 3: Prospecção por org
+    if _supabase_disponivel():
+        executar_prospeccao(dias=dias, sem_email=sem_email)
 
-    # Gera Excel
-    arquivo = gerar_excel(resultados)
-
-    # Envia email
-    if not sem_email:
-        enviar_email(resultados, arquivo)
-    else:
-        log.info("Envio de email desabilitado (--sem-email)")
-
-    log.info("=" * 60)
-    log.info("Concluído!")
     return resultados
 
 
@@ -318,17 +360,20 @@ def executar_pipeline_diario():
     log.info("PIPELINE DIÁRIO — %s", datetime.now().strftime("%d/%m/%Y %H:%M"))
     log.info("=" * 60)
 
-    # Fase 1: Coleta de licitações (base para tudo)
-    _executar_com_log("Busca PNCP", executar_busca)
+    # Fase 1: Coleta genérica de licitações (sem keywords)
+    _executar_com_log("Coleta genérica PNCP", executar_coleta)
 
     # Fase 2: Enriquecimento (depende da Fase 1)
-    _executar_com_log("Análise de editais", executar_analise_editais)
     _executar_com_log("Coleta de itens", executar_coleta_itens)
+    _executar_com_log("Análise de editais", executar_analise_editais)
 
     # Fase 3: Resultados (depende da Fase 2 - itens)
     _executar_com_log("Coleta de resultados", executar_coleta_resultados)
 
-    # Fase 4: Inteligência (depende das Fases 2-3)
+    # Fase 4: Prospecção por org (depende das Fases 1-3)
+    _executar_com_log("Prospecção por organização", executar_prospeccao)
+
+    # Fase 5: Inteligência (depende das Fases 2-3)
     _executar_com_log("Comparativo de mercado", executar_comparativo_mercado)
     _executar_com_log("Preços de referência", executar_precos_referencia)
 
@@ -402,7 +447,7 @@ def agendar():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Busca licitações de software no PNCP para municípios de MG e RJ com FPM até 2.8"
+        description="Licitaê — Coleta genérica + prospecção por organização"
     )
     parser.add_argument("--dias", type=int, help="Dias retroativos para buscar (padrão: 7)")
     parser.add_argument("--de", dest="data_de", help="Data inicial (YYYYMMDD)")
@@ -432,6 +477,8 @@ def main():
     parser.add_argument("--dias-coleta", type=int, default=30, help="Dias retroativos para coleta (padrão: 30)")
     parser.add_argument("--calcular-comparativo", action="store_true", help="Calcula comparativo de mercado entre plataformas")
     parser.add_argument("--calcular-precos", action="store_true", help="Calcula preços de referência para licitações abertas")
+    parser.add_argument("--prospectar", action="store_true", help="Roda prospecção por org (sem nova coleta)")
+    parser.add_argument("--apenas-coletar", action="store_true", help="Roda apenas coleta genérica (sem prospecção)")
 
     args = parser.parse_args()
     _setup_logging(args.verbose)
@@ -514,6 +561,23 @@ def main():
 
     if args.calcular_precos:
         executar_precos_referencia()
+        return
+
+    if args.prospectar:
+        if not _supabase_disponivel():
+            log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY não configurados no .env")
+            return
+        executar_prospeccao(dias=args.dias)
+        return
+
+    if args.apenas_coletar:
+        executar_coleta(
+            dias=args.dias,
+            data_de=args.data_de,
+            data_ate=args.data_ate,
+            sem_supabase=args.sem_supabase,
+            dry_run=args.dry_run,
+        )
         return
 
     if args.agendar:

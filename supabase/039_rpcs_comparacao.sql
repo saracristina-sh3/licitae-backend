@@ -4,7 +4,9 @@
 
 -- ── Buscar itens das licitações selecionadas na sessão ────
 -- Retorna itens + resultados das licitações NÃO excluídas.
--- Usado na fase 2 para o usuário selecionar itens.
+-- Vinculação licitacoes → itens_contratacao via:
+--   1. licitacao_hash = hash_dedup (quando disponível)
+--   2. cnpj_orgao + ano_compra + sequencial_compra (extraídos da url_fonte)
 CREATE OR REPLACE FUNCTION buscar_itens_por_licitacoes(
     p_sessao_id UUID
 )
@@ -62,26 +64,30 @@ BEGIN
                 FROM resultados_item ri WHERE ri.item_id = ic.id),
                 '[]'::json
             ) AS resultados,
-            -- Flag se o item já foi excluído pelo usuário
             CASE WHEN si.id IS NOT NULL AND si.excluido = TRUE THEN TRUE ELSE FALSE END AS excluido
         FROM licitacoes l
-        JOIN itens_contratacao ic ON ic.licitacao_hash = l.hash_dedup
-        -- Filtrar: apenas licitações NÃO excluídas na sessão
-        LEFT JOIN sessao_licitacoes sl
-            ON sl.sessao_id = p_sessao_id AND sl.licitacao_id = l.id AND sl.excluida = TRUE
-        -- Trazer flag de exclusão de item (se existir)
+        -- Join robusto: por hash OU por cnpj+ano+seq do dados_brutos JSONB
+        JOIN itens_contratacao ic ON (
+            -- Vinculação primária: hash direto
+            (ic.licitacao_hash IS NOT NULL AND ic.licitacao_hash = l.hash_dedup)
+            OR
+            -- Vinculação secundária: cnpj + ano + sequencial via dados_brutos
+            (
+                l.cnpj_orgao IS NOT NULL
+                AND l.cnpj_orgao != ''
+                AND l.dados_brutos IS NOT NULL
+                AND ic.cnpj_orgao = l.cnpj_orgao
+                AND ic.ano_compra = (l.dados_brutos->>'anoCompra')::int
+                AND ic.sequencial_compra = (l.dados_brutos->>'sequencialCompra')::int
+            )
+        )
+        -- Apenas licitações SELECIONADAS na sessão (excluida = FALSE)
+        JOIN sessao_licitacoes sl
+            ON sl.sessao_id = p_sessao_id AND sl.licitacao_id = l.id AND sl.excluida = FALSE
+        -- Flag de exclusão de item
         LEFT JOIN sessao_itens si
             ON si.sessao_id = p_sessao_id AND si.item_id = ic.id
-        WHERE l.id IN (
-            -- Licitações que matcham os filtros da sessão
-            -- Se filtros_aplicados contém relevancia, filtrar por ela
-            SELECT l2.id FROM licitacoes l2
-            WHERE (v_sessao.filtros_aplicados IS NULL
-                OR v_sessao.filtros_aplicados->>'relevancia' IS NULL
-                OR l2.relevancia = (v_sessao.filtros_aplicados->>'relevancia'))
-        )
-        AND sl.id IS NULL  -- Excluir as que o usuário marcou
-        AND ic.valor_unitario_estimado > 0
+        WHERE ic.valor_unitario_estimado > 0
     ) t;
 
     RETURN json_build_object(
@@ -92,7 +98,6 @@ END;
 $$;
 
 -- ── Contar licitações disponíveis para uma sessão ─────────
--- Usado na fase 1 para mostrar totais no footer
 CREATE OR REPLACE FUNCTION contar_licitacoes_sessao(
     p_sessao_id UUID
 )
@@ -104,7 +109,6 @@ DECLARE
     v_total INT;
     v_excluidas INT;
 BEGIN
-    -- Verificar acesso
     IF NOT EXISTS (
         SELECT 1 FROM sessoes_comparacao
         WHERE id = p_sessao_id AND org_id IN (SELECT get_user_org_ids())
@@ -112,10 +116,8 @@ BEGIN
         RETURN json_build_object('error', 'Sessão não encontrada');
     END IF;
 
-    -- Total de licitações (todas que matcham config)
     SELECT COUNT(*) INTO v_total FROM licitacoes;
 
-    -- Total excluídas nesta sessão
     SELECT COUNT(*) INTO v_excluidas
     FROM sessao_licitacoes
     WHERE sessao_id = p_sessao_id AND excluida = TRUE;

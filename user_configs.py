@@ -40,26 +40,19 @@ def carregar_configs_org() -> list[dict]:
 
 def unificar_configs(configs: list[dict]) -> dict:
     """
-    Combina configs de todas as organizações em uma única config de busca.
-    O scraper busca a união de tudo para depois filtrar por org.
+    Combina configs de todas as organizações em uma única config de coleta.
+    O coletor busca a união de UFs/modalidades (sem keywords).
+    Keywords são usados apenas na prospecção por org.
     """
     ufs = set()
-    palavras_chave = set()
     modalidades = set()
     fontes = set()
-    termos_alta = set()
-    termos_media = set()
-    termos_exclusao = set()
     fpm_maximo = 0
 
     for c in configs:
         ufs.update(c.get("ufs", []))
-        palavras_chave.update(c.get("palavras_chave", []))
         modalidades.update(c.get("modalidades", []))
         fontes.update(c.get("fontes", []))
-        termos_alta.update(c.get("termos_alta", []))
-        termos_media.update(c.get("termos_media", []))
-        termos_exclusao.update(c.get("termos_exclusao", []))
         fpm_maximo = max(fpm_maximo, c.get("fpm_maximo", 2.8))
 
     # org_dominios_config — modalidades prevalecem quando configuradas
@@ -71,12 +64,8 @@ def unificar_configs(configs: list[dict]) -> dict:
 
     return {
         "ufs": sorted(ufs),
-        "palavras_chave": sorted(palavras_chave),
         "modalidades": sorted(modalidades),
         "fontes": sorted(fontes),
-        "termos_alta": sorted(termos_alta),
-        "termos_media": sorted(termos_media),
-        "termos_exclusao": sorted(termos_exclusao),
         "fpm_maximo": fpm_maximo,
     }
 
@@ -108,6 +97,7 @@ def carregar_dominios_org() -> dict[str, dict[str, list[int]]]:
 def _config_padrao() -> dict:
     """Config padrão baseada no .env (usada quando não há orgs)."""
     return {
+        "org_id": None,
         "ufs": Config.UFS,
         "fpm_maximo": Config.POPULACAO_MAXIMA,
         "palavras_chave": Config.PALAVRAS_CHAVE,
@@ -116,6 +106,8 @@ def _config_padrao() -> dict:
         "termos_alta": TERMOS_ALTA,
         "termos_media": TERMOS_MEDIA,
         "termos_exclusao": [],
+        "microrregioes": [],
+        "ncms_alvo": [],
     }
 
 
@@ -123,6 +115,7 @@ def _normalizar_config(c: dict) -> dict:
     """Garante que todos os campos existem."""
     padrao = _config_padrao()
     return {
+        "org_id": c.get("org_id"),
         "ufs": c.get("ufs") or padrao["ufs"],
         "fpm_maximo": fpm_para_populacao(c.get("fpm_maximo", 2.8)),
         "palavras_chave": c.get("palavras_chave") or padrao["palavras_chave"],
@@ -131,4 +124,6 @@ def _normalizar_config(c: dict) -> dict:
         "termos_alta": c.get("termos_alta") or padrao["termos_alta"],
         "termos_media": c.get("termos_media") or padrao["termos_media"],
         "termos_exclusao": c.get("termos_exclusao") or [],
+        "microrregioes": c.get("microrregioes") or [],
+        "ncms_alvo": c.get("ncms_alvo") or [],
     }
