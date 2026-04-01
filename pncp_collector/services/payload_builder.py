@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 
 from pncp_collector.constants import VERSAO_COLETOR
 from pncp_collector.types import ItemRow, Metadata, ResultadoRow
+
+
+def _gerar_hash_licitacao(cnpj: str, ano: int, sequencial: int, fonte: str = "PNCP") -> str:
+    """Gera hash compatível com db._hash_licitacao."""
+    raw = f"{fonte}:{cnpj}:{ano}:{sequencial}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
 def montar_item_row(
@@ -17,8 +24,11 @@ def montar_item_row(
     metadata: Metadata,
 ) -> ItemRow:
     """Constrói o dicionário de inserção de um item."""
+    # Garante que licitacao_hash nunca é None
+    hash_final = licitacao_hash or _gerar_hash_licitacao(cnpj, ano, sequencial)
+
     return ItemRow(
-        licitacao_hash=licitacao_hash,
+        licitacao_hash=hash_final,
         cnpj_orgao=cnpj,
         ano_compra=ano,
         sequencial_compra=sequencial,
