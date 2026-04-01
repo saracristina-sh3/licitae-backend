@@ -137,6 +137,14 @@ def coletar_itens_contratacao(
             _tracker.registrar_falha(tipo, msg)
             stats["erros"] += 1
 
+        # Marca licitação como tendo itens coletados
+        if persistidos > 0 and licitacao_hash:
+            try:
+                from db import marcar_itens_coletados
+                marcar_itens_coletados(licitacao_hash)
+            except Exception as exc:
+                log.debug("Falha ao marcar itens_coletados: %s", exc)
+
     # 4. Busca resultados dos itens com resultado
     if itens_com_resultado:
         # Precisa dos IDs após o upsert

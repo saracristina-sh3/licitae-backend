@@ -12,6 +12,7 @@ Consulta licitações já coletadas no banco e aplica:
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 
@@ -181,10 +182,16 @@ def prospectar_para_org(org_config: dict, dias_retroativos: int = 7) -> dict:
         # Match nos itens (se coletados)
         match_itens: list[dict] = []
         itens: list[dict] = []
-        hash_dedup = lic.get("hash_dedup", "")
+        cnpj = lic.get("cnpj_orgao", "")
 
-        if lic.get("itens_coletados") and hash_dedup:
-            itens = buscar_itens_licitacao(hash_dedup)
+        if lic.get("itens_coletados") and cnpj:
+            # Extrair ano/seq da URL
+            url = lic.get("url_fonte", "") or ""
+            url_match = re.search(r"/editais/[^/]+/(\d+)/(\d+)", url)
+            if url_match:
+                ano = int(url_match.group(1))
+                seq = int(url_match.group(2))
+                itens = buscar_itens_licitacao(cnpj, ano, seq)
             for item in itens:
                 descricao = item.get("descricao", "") or ""
                 match_item = _match_texto(descricao, palavras_chave, [])

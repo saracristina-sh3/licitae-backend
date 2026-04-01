@@ -125,80 +125,6 @@ def get_municipio_id_cached(codigo_ibge: str) -> int | None:
 
 def inserir_licitacoes(resultados: list[dict]) -> dict:
     """
-    Insere licitações no Supabase com deduplicação.
-    Retorna {"inseridas": N, "duplicadas": N, "erros": N}
-    """
-    client = get_client()
-    stats = {"inseridas": 0, "duplicadas": 0, "erros": 0}
-
-    for r in resultados:
-        # Gerar hash de dedup
-        cnpj = r.get("cnpj_orgao", "")
-        if cnpj:
-            h = _hash_licitacao(cnpj, r.get("ano_compra", ""), r.get("seq_compra", ""), r.get("fonte", "PNCP"))
-        else:
-            h = _hash_licitacao_texto(r["municipio"], r["objeto"], r.get("data_publicacao", ""), r.get("fonte", "PNCP"))
-
-        # Buscar municipio_id
-        codigo_ibge = r.get("codigo_ibge", "")
-        municipio_id = get_municipio_id_cached(codigo_ibge) if codigo_ibge else None
-
-        row = {
-            "hash_dedup": h,
-            "municipio_id": municipio_id,
-            "municipio_nome": r["municipio"],
-            "uf": r["uf"],
-            "orgao": r.get("orgao", ""),
-            "cnpj_orgao": r.get("cnpj_orgao", ""),
-            "objeto": r["objeto"],
-            "modalidade": r.get("modalidade", ""),
-            "valor_estimado": r.get("valor_estimado", 0),
-            "valor_homologado": r.get("valor_homologado", 0),
-            "situacao": r.get("situacao", ""),
-            "data_publicacao": r.get("data_publicacao") or None,
-            "data_abertura_proposta": r.get("data_abertura_proposta") or None,
-            "data_encerramento_proposta": r.get("data_encerramento_proposta") or None,
-            "fonte": r.get("fonte", "PNCP"),
-            "url_fonte": r.get("url_pncp", "") or r.get("url_fonte", ""),
-            "relevancia": r.get("relevancia", "BAIXA"),
-            "palavras_chave": r.get("palavras_chave_encontradas", "").split(", ") if isinstance(r.get("palavras_chave_encontradas"), str) else r.get("palavras_chave_encontradas", []),
-            "dados_brutos": r.get("dados_brutos"),
-            "exclusivo_me_epp": r.get("exclusivo_me_epp", False),
-            "modalidade_id": r.get("modalidade_id"),
-            "modo_disputa_id": r.get("modo_disputa_id"),
-            "situacao_compra_id": r.get("situacao_compra_id"),
-            "score": r.get("score"),
-            "urgencia": r.get("urgencia"),
-            "informacao_complementar": r.get("informacao_complementar"),
-        }
-
-        try:
-            client.table("licitacoes").upsert(
-                row,
-                on_conflict="hash_dedup",
-            ).execute()
-            stats["inseridas"] += 1
-        except Exception as e:
-            err_msg = str(e)
-            if "duplicate" in err_msg.lower() or "conflict" in err_msg.lower():
-                stats["duplicadas"] += 1
-            else:
-                stats["erros"] += 1
-                log.error("Erro ao inserir licitação: %s", e)
-
-    return stats
-
-
-def marcar_itens_coletados(hash_dedup: str) -> None:
-    """Marca licitação como tendo itens coletados."""
-    client = get_client()
-    client.table("licitacoes").update(
-        {"itens_coletados": True}
-    ).eq("hash_dedup", hash_dedup).execute()
-
-
-def inserir_licitacoes_generica(resultados: list[dict]) -> dict:
-    """
     Insere licitações no Supabase SEM score/relevância (coleta genérica).
     Score e relevância são calculados na prospecção por org.
     Retorna {"inseridas": N, "duplicadas": N, "erros": N}
@@ -256,6 +182,14 @@ def inserir_licitacoes_generica(resultados: list[dict]) -> dict:
                 log.error("Erro ao inserir licitação: %s", e)
 
     return stats
+
+
+def marcar_itens_coletados(hash_dedup: str) -> None:
+    """Marca licitação como tendo itens coletados."""
+    client = get_client()
+    client.table("licitacoes").update(
+        {"itens_coletados": True}
+    ).eq("hash_dedup", hash_dedup).execute()
 
 
 def upsert_oportunidades_org(org_id: str, oportunidades: list[dict], batch_size: int = 50) -> int:
@@ -333,14 +267,17 @@ def buscar_licitacoes_para_prospeccao(
     return rows
 
 
-def buscar_itens_licitacao(licitacao_hash: str) -> list[dict]:
-    """Busca itens de uma licitação pelo hash_dedup."""
+def buscar_itens_licitacao(cnpj_orgao: str, ano_compra: int, sequencial_compra: int) -> list[dict]:
+    """Busca itens de uma licitação por cnpj + ano + sequencial."""
     client = get_client()
     result = (
         client.table("itens_contratacao")
         .select("numero_item, descricao, quantidade, unidade_medida, "
                 "valor_unitario_estimado, valor_total_estimado, ncm_nbs_codigo")
-        .eq("licitacao_hash", licitacao_hash)
+        .eq("cnpj_orgao", cnpj_orgao)
+        .eq("ano_compra", ano_compra)
+        .eq("sequencial_compra", sequencial_compra)
+        .order("numero_item")
         .execute()
     )
     return result.data or []

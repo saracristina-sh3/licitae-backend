@@ -165,8 +165,8 @@ def executar_coleta(
     # Grava no Supabase (sem score/relevância)
     usar_supabase = not sem_supabase and _supabase_disponivel()
     if usar_supabase and resultados:
-        from db import inserir_licitacoes_generica
-        stats = inserir_licitacoes_generica(resultados)
+        from db import inserir_licitacoes
+        stats = inserir_licitacoes(resultados)
         log.info("  Inseridas: %d | Duplicadas: %d | Erros: %d",
                  stats["inseridas"], stats["duplicadas"], stats["erros"])
 
