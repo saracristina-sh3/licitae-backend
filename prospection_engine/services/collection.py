@@ -64,10 +64,11 @@ _BENEFICIO_ME_EPP = {1, 2, 3}
 
 
 def _montar_resultado_generico(contratacao: dict, mun_info: dict) -> dict:
-    """Monta dict genérico para inserção no banco (sem score/relevância)."""
+    """Monta dict para inserção no banco com todos os campos disponíveis da API."""
     orgao = contratacao.get("orgaoEntidade", {}) or {}
     objeto = contratacao.get("objetoCompra", "") or ""
     info_compl = contratacao.get("informacaoComplementar", "") or ""
+    amparo = contratacao.get("amparoLegal", {}) or {}
 
     return {
         "municipio": mun_info["nome"],
@@ -94,6 +95,17 @@ def _montar_resultado_generico(contratacao: dict, mun_info: dict) -> dict:
         "modalidade_id": contratacao.get("modalidadeId"),
         "modo_disputa_id": contratacao.get("modoDisputaId"),
         "situacao_compra_id": contratacao.get("situacaoCompraId"),
+        # Novos campos P1
+        "srp": contratacao.get("srp", False),
+        "numero_controle_pncp": contratacao.get("numeroControlePNCP", ""),
+        "amparo_legal_codigo": str(amparo.get("codigo", "")) if amparo else "",
+        "amparo_legal_descricao": amparo.get("descricao", "") if amparo else "",
+        "numero_processo": contratacao.get("processo", ""),
+        "link_sistema_origem": contratacao.get("linkSistemaOrigem", ""),
+        "tipo_instrumento_convocatorio": contratacao.get("tipoInstrumentoConvocatorioNome", ""),
+        "data_atualizacao": contratacao.get("dataAtualizacao", ""),
+        # P0: JSON completo da API
+        "dados_brutos": contratacao,
     }
 
 

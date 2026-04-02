@@ -159,12 +159,22 @@ def inserir_licitacoes(resultados: list[dict]) -> dict:
             "data_encerramento_proposta": r.get("data_encerramento_proposta") or None,
             "fonte": r.get("fonte", "PNCP"),
             "url_fonte": r.get("url_pncp", "") or r.get("url_fonte", ""),
-            "dados_brutos": r.get("dados_brutos"),
             "exclusivo_me_epp": r.get("exclusivo_me_epp", False),
             "modalidade_id": r.get("modalidade_id"),
             "modo_disputa_id": r.get("modo_disputa_id"),
             "situacao_compra_id": r.get("situacao_compra_id"),
             "informacao_complementar": r.get("informacao_complementar"),
+            # Novos campos P1
+            "srp": r.get("srp", False),
+            "numero_controle_pncp": r.get("numero_controle_pncp") or None,
+            "amparo_legal_codigo": r.get("amparo_legal_codigo") or None,
+            "amparo_legal_descricao": r.get("amparo_legal_descricao") or None,
+            "numero_processo": r.get("numero_processo") or None,
+            "link_sistema_origem": r.get("link_sistema_origem") or None,
+            "tipo_instrumento_convocatorio": r.get("tipo_instrumento_convocatorio") or None,
+            "data_atualizacao": r.get("data_atualizacao") or None,
+            # P0: JSON completo da API
+            "dados_brutos": json.dumps(r["dados_brutos"]) if r.get("dados_brutos") else None,
         }
 
         try:
