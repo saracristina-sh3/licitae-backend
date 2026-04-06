@@ -206,10 +206,14 @@ def coletar_pendentes(limite: int = 100, db_client: Any = None) -> StatsColeta:
 
         log.debug("Coletando itens: %s/%d/%d", cnpj, ano, seq)
 
+        # codigo_ibge vem do join com municipios
+        mun_data = lic.get("municipios") or {}
+        codigo_ibge = mun_data.get("codigo_ibge") if isinstance(mun_data, dict) else None
+
         metadata = Metadata(
             uf=lic.get("uf"),
             municipio=lic.get("municipio_nome"),
-            codigo_ibge=lic.get("codigo_ibge"),
+            codigo_ibge=codigo_ibge,
             modalidade_id=lic.get("modalidade_id"),
             plataforma_id=None,
             plataforma_nome=None,
