@@ -53,7 +53,7 @@ def sync_municipios():
 
     Lê UFs de todas as org_configs para trazer tudo que as orgs precisam.
     """
-    from municipios import carregar_municipios, carregar_microrregioes, vincular_municipios_microrregioes
+    from municipios import carregar_municipios, carregar_microrregioes
     from db import sync_municipios as db_sync, sync_microrregioes as db_sync_micro
     from user_configs import carregar_configs_org, unificar_configs
 
@@ -62,17 +62,16 @@ def sync_municipios():
     ufs_sync = busca_config.get("ufs") or Config.UFS
     fpm_max = busca_config.get("fpm_maximo") or Config.POPULACAO_MAXIMA
 
-    # 1. Sincronizar microrregiões
-    log.info("Sincronizando microrregiões de %d UFs...", len(ufs_sync))
+    # 1. Sincronizar municípios (já inclui microrregiao_id da API IBGE)
+    log.info("Sincronizando municípios de %d UFs no Supabase...", len(ufs_sync))
+    munis = carregar_municipios(ufs_sync, fpm_max)
+    count = db_sync(munis)
+
+    # 2. Sincronizar microrregiões (extrai dos municípios + nomes da API)
+    log.info("Sincronizando microrregiões...")
     micros = carregar_microrregioes(ufs_sync)
     count_micro = db_sync_micro(micros)
     log.info("Microrregiões sincronizadas: %d", count_micro)
-
-    # 2. Sincronizar municípios (com vínculo de microrregião)
-    log.info("Sincronizando municípios de %d UFs no Supabase...", len(ufs_sync))
-    munis = carregar_municipios(ufs_sync, fpm_max)
-    munis = vincular_municipios_microrregioes(munis, micros, ufs_sync)
-    count = db_sync(munis)
     log.info("Municípios sincronizados: %d", count)
     for uf in sorted(ufs_sync):
         c = len([m for m in munis if m["uf"] == uf])
