@@ -1,7 +1,6 @@
 -- ============================================================
 -- RPC: buscar oportunidades da organizacao do usuario.
--- Se a org tem oportunidades prospectadas, le de oportunidades_org.
--- Senao (sem keywords ou prospeccao nao rodou), le direto de licitacoes.
+-- Suporta filtro por UF e microrregiao (via JOIN municipios).
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION buscar_oportunidades_org_filtradas(
@@ -12,6 +11,7 @@ CREATE OR REPLACE FUNCTION buscar_oportunidades_org_filtradas(
     p_modalidade_id INTEGER DEFAULT NULL,
     p_modo_disputa_id INTEGER DEFAULT NULL,
     p_situacao_compra_id INTEGER DEFAULT NULL,
+    p_microrregiao_id INTEGER DEFAULT NULL,
     p_ordenar_por TEXT DEFAULT 'score',
     p_limite INT DEFAULT 20,
     p_offset INT DEFAULT 0
@@ -25,7 +25,6 @@ DECLARE
     v_result JSON;
     v_has_oportunidades BOOLEAN;
 BEGIN
-    -- 1. Busca org do usuario
     SELECT p.org_id INTO v_org_id
     FROM profiles p WHERE p.id = auth.uid();
 
@@ -33,19 +32,17 @@ BEGIN
         RETURN json_build_object('data', '[]'::json, 'count', 0);
     END IF;
 
-    -- 2. Verifica se ha oportunidades prospectadas para esta org
     SELECT EXISTS(
         SELECT 1 FROM oportunidades_org WHERE org_id = v_org_id LIMIT 1
     ) INTO v_has_oportunidades;
 
-    -- ══════════════════════════════════════════════════════════
-    -- CAMINHO A: org tem oportunidades prospectadas
-    -- ══════════════════════════════════════════════════════════
+    -- ══════ CAMINHO A: com oportunidades prospectadas ══════
     IF v_has_oportunidades THEN
 
         SELECT count(*) INTO v_count
         FROM oportunidades_org o
         JOIN licitacoes l ON l.id = o.licitacao_id
+        LEFT JOIN municipios m ON m.id = l.municipio_id
         WHERE o.org_id = v_org_id
             AND (p_ufs IS NULL OR l.uf = ANY(p_ufs))
             AND (p_relevancia IS NULL OR o.relevancia = p_relevancia)
@@ -53,7 +50,8 @@ BEGIN
             AND (p_busca IS NULL OR p_busca = '' OR l.objeto ILIKE '%' || p_busca || '%')
             AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
             AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
-            AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id);
+            AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
+            AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id);
 
         SELECT json_agg(t) INTO v_result
         FROM (
@@ -70,6 +68,7 @@ BEGIN
                 o.total_itens, o.itens_relevantes, o.valor_itens_relevantes
             FROM oportunidades_org o
             JOIN licitacoes l ON l.id = o.licitacao_id
+            LEFT JOIN municipios m ON m.id = l.municipio_id
             WHERE o.org_id = v_org_id
                 AND (p_ufs IS NULL OR l.uf = ANY(p_ufs))
                 AND (p_relevancia IS NULL OR o.relevancia = p_relevancia)
@@ -78,6 +77,7 @@ BEGIN
                 AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
                 AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
                 AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
+                AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id)
             ORDER BY
                 CASE WHEN p_ordenar_por = 'data_publicacao' THEN l.data_publicacao END DESC,
                 CASE WHEN p_ordenar_por = 'valor_estimado' THEN l.valor_estimado END DESC,
@@ -86,20 +86,19 @@ BEGIN
             LIMIT p_limite OFFSET p_offset
         ) t;
 
-    -- ══════════════════════════════════════════════════════════
-    -- CAMINHO B: sem oportunidades (sem keywords ou prospeccao nao rodou)
-    -- Mostra todas as licitacoes direto, sem score
-    -- ══════════════════════════════════════════════════════════
+    -- ══════ CAMINHO B: sem oportunidades ══════
     ELSE
 
         SELECT count(*) INTO v_count
         FROM licitacoes l
+        LEFT JOIN municipios m ON m.id = l.municipio_id
         WHERE (p_ufs IS NULL OR l.uf = ANY(p_ufs))
             AND (p_proposta_aberta IS NULL OR l.proposta_aberta = p_proposta_aberta)
             AND (p_busca IS NULL OR p_busca = '' OR l.objeto ILIKE '%' || p_busca || '%')
             AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
             AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
-            AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id);
+            AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
+            AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id);
 
         SELECT json_agg(t) INTO v_result
         FROM (
@@ -120,12 +119,14 @@ BEGIN
                 0 AS itens_relevantes,
                 0::numeric AS valor_itens_relevantes
             FROM licitacoes l
+            LEFT JOIN municipios m ON m.id = l.municipio_id
             WHERE (p_ufs IS NULL OR l.uf = ANY(p_ufs))
                 AND (p_proposta_aberta IS NULL OR l.proposta_aberta = p_proposta_aberta)
                 AND (p_busca IS NULL OR p_busca = '' OR l.objeto ILIKE '%' || p_busca || '%')
                 AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
                 AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
                 AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
+                AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id)
             ORDER BY
                 CASE WHEN p_ordenar_por = 'data_publicacao' THEN l.data_publicacao END DESC,
                 CASE WHEN p_ordenar_por = 'valor_estimado' THEN l.valor_estimado END DESC,
