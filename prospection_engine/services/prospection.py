@@ -175,9 +175,15 @@ def prospectar_para_org(org_config: dict, dias_retroativos: int = 7) -> dict:
         objeto = lic.get("objeto", "") or ""
         complementar = lic.get("informacao_complementar", "") or ""
 
-        # Match no objeto e complementar
-        match_obj = _match_texto(objeto, palavras_chave, termos_exclusao)
-        match_compl = _match_texto(complementar, palavras_chave, termos_exclusao)
+        # Exclusão fail-fast: se objeto ou complementar contém termo de exclusão, pula
+        texto_completo = normalizar(f"{objeto} {complementar}")
+        excluida = any(normalizar(t) in texto_completo for t in termos_exclusao)
+        if excluida:
+            continue
+
+        # Match no objeto e complementar (sem exclusão, já verificada acima)
+        match_obj = _match_texto(objeto, palavras_chave, [])
+        match_compl = _match_texto(complementar, palavras_chave, [])
 
         # Match nos itens (se coletados)
         match_itens: list[dict] = []

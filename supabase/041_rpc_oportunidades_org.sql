@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION buscar_oportunidades_org_filtradas(
     p_modalidade_id INTEGER DEFAULT NULL,
     p_modo_disputa_id INTEGER DEFAULT NULL,
     p_situacao_compra_id INTEGER DEFAULT NULL,
-    p_microrregiao_id INTEGER DEFAULT NULL,
+    p_microrregioes_ids INTEGER[] DEFAULT NULL,
     p_ordenar_por TEXT DEFAULT 'score',
     p_limite INT DEFAULT 20,
     p_offset INT DEFAULT 0
@@ -51,7 +51,7 @@ BEGIN
             AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
             AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
             AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
-            AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id);
+            AND (p_microrregioes_ids IS NULL OR m.microrregiao_id = ANY(p_microrregioes_ids));
 
         SELECT json_agg(t) INTO v_result
         FROM (
@@ -77,7 +77,7 @@ BEGIN
                 AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
                 AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
                 AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
-                AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id)
+                AND (p_microrregioes_ids IS NULL OR m.microrregiao_id = ANY(p_microrregioes_ids))
             ORDER BY
                 CASE WHEN p_ordenar_por = 'data_publicacao' THEN l.data_publicacao END DESC,
                 CASE WHEN p_ordenar_por = 'valor_estimado' THEN l.valor_estimado END DESC,
@@ -98,7 +98,7 @@ BEGIN
             AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
             AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
             AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
-            AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id);
+            AND (p_microrregioes_ids IS NULL OR m.microrregiao_id = ANY(p_microrregioes_ids));
 
         SELECT json_agg(t) INTO v_result
         FROM (
@@ -126,7 +126,7 @@ BEGIN
                 AND (p_modalidade_id IS NULL OR l.modalidade_id = p_modalidade_id)
                 AND (p_modo_disputa_id IS NULL OR l.modo_disputa_id = p_modo_disputa_id)
                 AND (p_situacao_compra_id IS NULL OR l.situacao_compra_id = p_situacao_compra_id)
-                AND (p_microrregiao_id IS NULL OR m.microrregiao_id = p_microrregiao_id)
+                AND (p_microrregioes_ids IS NULL OR m.microrregiao_id = ANY(p_microrregioes_ids))
             ORDER BY
                 CASE WHEN p_ordenar_por = 'data_publicacao' THEN l.data_publicacao END DESC,
                 CASE WHEN p_ordenar_por = 'valor_estimado' THEN l.valor_estimado END DESC,
