@@ -319,16 +319,16 @@ def _notificar_novas_oportunidades(org_id: str, oportunidades: list[dict], licit
             user_id = membro["user_id"]
 
             try:
-                uc = client.table("user_config").select(
+                profile = client.table("profiles").select(
                     "alertas_email, alertas_telegram, telegram_chat_id"
-                ).eq("user_id", user_id).single().execute()
+                ).eq("id", user_id).single().execute()
             except Exception:
                 continue
 
-            if not uc.data:
+            if not profile.data:
                 continue
 
-            config_user = uc.data
+            config_user = profile.data
 
             # Montar lista de oportunidades
             items_texto = []
@@ -364,7 +364,7 @@ def _enviar_email_novas_oportunidades(client, user_id: str, items: list[dict]):
         return
 
     try:
-        profile = client.table("profiles").select("email").eq("user_id", user_id).single().execute()
+        profile = client.table("profiles").select("email").eq("id", user_id).single().execute()
         email = profile.data.get("email") if profile.data else None
         if not email:
             return

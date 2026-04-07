@@ -525,24 +525,13 @@ async def listar_config_organizacao(org_id: str = "") -> str:
     """
     client = _get_supabase_client()
 
-    query_config = client.table("user_config").select("*")
+    query_config = client.table("org_config").select("*")
     if org_id:
         query_config = query_config.eq("org_id", org_id)
     config_result = query_config.limit(10).execute()
 
-    query_excl = client.table("org_termos_exclusao").select("*")
-    if org_id:
-        query_excl = query_excl.eq("org_id", org_id)
-    excl_result = query_excl.execute()
-
-    termos_por_org: dict[str, list[str]] = {}
-    for row in (excl_result.data or []):
-        oid = row.get("org_id", "")
-        termos_por_org.setdefault(oid, []).append(row["termo"])
-
     return json.dumps({
         "configs": config_result.data or [],
-        "termos_exclusao": termos_por_org,
     }, ensure_ascii=False, default=str)
 
 

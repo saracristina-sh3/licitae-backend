@@ -115,22 +115,15 @@ def preparar_contexto(client, licitacao_id: str) -> dict:
     # Config da organização
     org_data = None
     config = (
-        client.table("user_config")
-        .select("ufs, palavras_chave")
+        client.table("org_config")
+        .select("ufs, palavras_chave, termos_exclusao")
         .limit(1)
         .execute()
     )
     if config.data:
         org_data = config.data[0]
 
-    # Termos de exclusão
-    excl = (
-        client.table("org_termos_exclusao")
-        .select("termo")
-        .limit(50)
-        .execute()
-    )
-    termos_exclusao = [r["termo"] for r in (excl.data or [])]
+    termos_exclusao = org_data.get("termos_exclusao", []) if org_data else []
 
     return {
         "licitacao": licitacao,

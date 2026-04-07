@@ -168,15 +168,14 @@ def _notificar_mudanca_email(client, user_id: str, licitacao_id: str, alertas: l
         return
 
     try:
-        uc = client.table("user_config").select(
-            "alertas_email"
-        ).eq("user_id", user_id).single().execute()
+        profile = client.table("profiles").select(
+            "alertas_email, email"
+        ).eq("id", user_id).single().execute()
 
-        if not uc.data or not uc.data.get("alertas_email"):
+        if not profile.data or not profile.data.get("alertas_email"):
             return
 
-        profile = client.table("profiles").select("email").eq("user_id", user_id).single().execute()
-        email = profile.data.get("email") if profile.data else None
+        email = profile.data.get("email")
         if not email:
             return
     except Exception:
@@ -248,14 +247,14 @@ def _notificar_mudanca_telegram(client, user_id: str, licitacao_id: str, alertas
         return
 
     try:
-        uc = client.table("user_config").select(
+        profile = client.table("profiles").select(
             "alertas_telegram, telegram_chat_id"
-        ).eq("user_id", user_id).single().execute()
+        ).eq("id", user_id).single().execute()
 
-        if not uc.data or not uc.data.get("alertas_telegram") or not uc.data.get("telegram_chat_id"):
+        if not profile.data or not profile.data.get("alertas_telegram") or not profile.data.get("telegram_chat_id"):
             return
 
-        chat_id = uc.data["telegram_chat_id"]
+        chat_id = profile.data["telegram_chat_id"]
     except Exception:
         return
 

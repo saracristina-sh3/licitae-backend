@@ -117,7 +117,7 @@ def _enviar_emails_prazo(client, alertas: list[dict]):
     for user_id, user_alertas in por_usuario.items():
         # Busca email do usuário
         try:
-            profile = client.table("profiles").select("email").eq("user_id", user_id).single().execute()
+            profile = client.table("profiles").select("email").eq("id", user_id).single().execute()
             email = profile.data.get("email") if profile.data else None
         except Exception:
             # Fallback: busca na auth.users via admin
@@ -230,14 +230,14 @@ def _enviar_telegram_prazo(client, alertas: list[dict]):
     for user_id, user_alertas in por_usuario.items():
         # Verifica se usuário habilitou Telegram
         try:
-            uc = client.table("user_config").select(
+            profile = client.table("profiles").select(
                 "alertas_telegram, telegram_chat_id"
-            ).eq("user_id", user_id).single().execute()
+            ).eq("id", user_id).single().execute()
 
-            if not uc.data or not uc.data.get("alertas_telegram") or not uc.data.get("telegram_chat_id"):
+            if not profile.data or not profile.data.get("alertas_telegram") or not profile.data.get("telegram_chat_id"):
                 continue
 
-            chat_id = uc.data["telegram_chat_id"]
+            chat_id = profile.data["telegram_chat_id"]
         except Exception:
             continue
 
