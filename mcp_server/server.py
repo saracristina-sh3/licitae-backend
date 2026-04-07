@@ -697,22 +697,41 @@ async def analisar_comparacao_sessao(sessao_id: str) -> str:
     # Montar prompt para IA
     prompt = _montar_prompt_analise(por_item, por_edital)
 
-    # Chamar IA
+    # Chamar IA (usa o mesmo provider da análise de licitações)
     try:
-        from ia_analysis.services.llm import chamar_llm
-        resposta = chamar_llm(prompt, modelo="claude")
-    except ImportError:
-        # Fallback se módulo de IA não disponível
-        resposta = {
-            "analise": {
-                "resumo": "Módulo de análise IA não disponível. Verifique a configuração.",
-                "por_item": [],
-                "por_edital": [],
-                "estrategia": "",
-            }
-        }
+        from ia_analysis.services.analise import _detectar_provider, _chamar_anthropic, _chamar_gemini
+        from ia_analysis.constants import SYSTEM_PROMPT
 
-    analise = resposta.get("analise", resposta)
+        provider, api_key, modelo = _detectar_provider()
+
+        prompt_completo = (
+            "Analise os comparativos abaixo e retorne um JSON com os campos: "
+            '"resumo" (string), "por_item" (array de {descricao, recomendacao, melhor_preco, fornecedor, risco}), '
+            '"por_edital" (array de {objeto, analise, oportunidade, risco}), '
+            '"estrategia" (string). Responda APENAS JSON válido.\n\n'
+            + prompt
+        )
+
+        if provider == "anthropic":
+            texto_resposta, _, _ = _chamar_anthropic(api_key, modelo, prompt_completo)
+        else:
+            texto_resposta, _, _ = _chamar_gemini(api_key, modelo, prompt_completo)
+
+        # Parse JSON da resposta
+        texto_limpo = texto_resposta.strip()
+        if texto_limpo.startswith("```"):
+            linhas = texto_limpo.split("\n")
+            linhas = [l for l in linhas if not l.strip().startswith("```")]
+            texto_limpo = "\n".join(linhas)
+
+        analise = json.loads(texto_limpo)
+
+    except (ImportError, RuntimeError) as e:
+        log.warning("IA indisponível: %s — usando análise local", e)
+        analise = _gerar_analise_fallback(por_item, por_edital)
+    except (json.JSONDecodeError, KeyError) as e:
+        log.error("Erro ao parsear resposta IA: %s", e)
+        analise = _gerar_analise_fallback(por_item, por_edital)
     gravar_resultado(client, sessao_id, "analise_ia", analise)
 
     # Atualizar fase da sessão
@@ -722,6 +741,59 @@ async def analisar_comparacao_sessao(sessao_id: str) -> str:
         .execute()
 
     return json.dumps(analise, ensure_ascii=False, default=str)
+
+
+def _gerar_analise_fallback(por_item: list | None, por_edital: list | None) -> dict:
+    """Gera análise básica quando a IA não está disponível."""
+    itens = por_item or []
+    editais = por_edital or []
+
+    resumo_parts = [f"Análise de {len(editais)} edital(is) com {len(itens)} grupo(s) de itens."]
+
+    multi_plat = [g for g in itens if len(g.get("plataformas", [])) >= 2]
+    if multi_plat:
+        resumo_parts.append(f"{len(multi_plat)} grupo(s) com preços em 2+ plataformas.")
+
+    economias = [e.get("economia") for e in editais if e.get("economia") is not None and e["economia"] > 0]
+    if economias:
+        media = sum(economias) / len(economias)
+        resumo_parts.append(f"Economia média: {media:.1f}%.")
+
+    analise_itens = []
+    for g in itens[:15]:
+        plats = g.get("plataformas", [])
+        item_analise: dict = {"descricao": g.get("descricao", "Item")}
+        if plats:
+            menor = plats[0] if isinstance(plats, list) else {}
+            item_analise["melhor_preco"] = menor.get("valor_medio", 0)
+            item_analise["fornecedor"] = menor.get("plataforma_nome", "")
+            if len(plats) >= 2:
+                diff = ((plats[-1].get("valor_medio", 0) - plats[0].get("valor_medio", 0)) /
+                        max(plats[0].get("valor_medio", 1), 1)) * 100
+                item_analise["recomendacao"] = (
+                    f"Diferença de {diff:.0f}% entre plataformas."
+                    if diff > 10 else "Preços convergentes."
+                )
+            else:
+                item_analise["recomendacao"] = "Referência única."
+        analise_itens.append(item_analise)
+
+    analise_editais = []
+    for e in editais:
+        eco = e.get("economia")
+        analise_editais.append({
+            "objeto": str(e.get("objeto", ""))[:100],
+            "analise": f"Economia de {eco:.1f}%." if eco and eco > 0 else "Sem dados de homologação.",
+            "oportunidade": "Boa margem para proposta competitiva." if eco and eco > 15 else None,
+            "risco": "Valor homologado acima do estimado." if eco and eco < 0 else None,
+        })
+
+    return {
+        "resumo": " ".join(resumo_parts),
+        "por_item": analise_itens,
+        "por_edital": analise_editais,
+        "estrategia": "Utilizar o menor preço por plataforma como base de referência.",
+    }
 
 
 def _montar_prompt_analise(por_item: list | None, por_edital: list | None) -> str:
