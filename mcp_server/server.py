@@ -930,6 +930,8 @@ async def _run_sse_with_auth(port: int) -> None:
             log.error("Erro na comparação de sessão: %s", e, exc_info=True)
             return JSONResponse({"error": "Erro interno na comparação"}, status_code=500)
 
+    LIMITE_ANALISES_MES = 10
+
     async def handle_analise_sessao(request):
         """Endpoint REST para análise IA de sessão."""
         try:
@@ -942,6 +944,20 @@ async def _run_sse_with_auth(port: int) -> None:
             return JSONResponse({"error": "sessao_id é obrigatório"}, status_code=400)
 
         try:
+            # Verificar limite mensal
+            client = _get_supabase_client()
+            from datetime import datetime
+            inicio_mes = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+            contagem = client.table("sessao_resultados").select(
+                "*", count="exact", head=True
+            ).eq("tipo", "analise_ia").gte("created_at", inicio_mes).execute()
+
+            if (contagem.count or 0) >= LIMITE_ANALISES_MES:
+                return JSONResponse(
+                    {"error": f"Limite de {LIMITE_ANALISES_MES} análises IA por mês atingido."},
+                    status_code=429,
+                )
+
             resultado = await analisar_comparacao_sessao(sessao_id)
             return JSONResponse(json.loads(resultado))
         except Exception as e:
