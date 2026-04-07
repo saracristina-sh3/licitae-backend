@@ -132,7 +132,8 @@ def verificar_mudancas():
             client.table("monitoramento_alertas").insert(alertas).execute()
             total_mudancas += len(alertas)
 
-            # Envia Telegram se habilitado
+            # Envia notificações
+            _notificar_mudanca_email(client, mon["user_id"], mon["licitacao_id"], alertas, lic)
             _notificar_mudanca_telegram(client, mon["user_id"], mon["licitacao_id"], alertas, lic)
 
             # Atualiza licitação no banco com dados novos
@@ -154,6 +155,89 @@ def verificar_mudancas():
 
     log.info("Verificação concluída: %d licitações, %d mudanças", len(monitoramentos), total_mudancas)
     return {"verificadas": len(monitoramentos), "mudancas": total_mudancas}
+
+
+def _notificar_mudanca_email(client, user_id: str, licitacao_id: str, alertas: list[dict], lic: dict):
+    """Envia notificação de mudança via email se o usuário habilitou."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from config import Config
+
+    if not Config.SMTP_USER:
+        return
+
+    try:
+        uc = client.table("user_config").select(
+            "alertas_email"
+        ).eq("user_id", user_id).single().execute()
+
+        if not uc.data or not uc.data.get("alertas_email"):
+            return
+
+        profile = client.table("profiles").select("email").eq("user_id", user_id).single().execute()
+        email = profile.data.get("email") if profile.data else None
+        if not email:
+            return
+    except Exception:
+        return
+
+    municipio = f"{lic.get('municipio_nome', '?')}/{lic.get('uf', '?')}"
+    objeto = (lic.get("objeto") or "")[:120]
+
+    linhas_html = ""
+    for a in alertas:
+        anterior = a["valor_anterior"] or "—"
+        novo = a["valor_novo"] or "—"
+        linhas_html += f"""
+        <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: 600;">{a['campo']}</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; color: #718096;">{anterior}</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; color: #2b6cb0; font-weight: 600;">{novo}</td>
+        </tr>"""
+
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; color: #2d3748;">
+        <h2 style="color: #e53e3e;">Mudanca detectada — Licitae</h2>
+        <p><strong>{municipio}</strong></p>
+        <p>{objeto}</p>
+        <table style="border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 12px;">
+            <tr style="background: #2d3748; color: white;">
+                <th style="padding: 8px;">Campo</th>
+                <th style="padding: 8px;">Anterior</th>
+                <th style="padding: 8px;">Novo</th>
+            </tr>
+            {linhas_html}
+        </table>
+        <p style="margin-top: 16px;">Abra o <strong>Licitae</strong> para ver os detalhes.</p>
+        <hr>
+        <p style="color: #718096; font-size: 12px;">Alerta automatico — Licitae</p>
+    </body>
+    </html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = Config.SMTP_USER
+    msg["To"] = email
+    msg["Subject"] = f"Licitae — Mudanca em {municipio}"
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
+            server.starttls()
+            server.login(Config.SMTP_USER, Config.SMTP_PASS)
+            server.sendmail(Config.SMTP_USER, email, msg.as_string())
+
+        client.table("alertas_enviados").insert({
+            "licitacao_id": licitacao_id,
+            "user_id": user_id,
+            "canal": "email",
+            "destinatario": email,
+        }).execute()
+
+        log.info("Email de mudanca enviado para %s", email)
+    except Exception as e:
+        log.error("Erro ao enviar email de mudanca para %s: %s", email, e)
 
 
 def _notificar_mudanca_telegram(client, user_id: str, licitacao_id: str, alertas: list[dict], lic: dict):

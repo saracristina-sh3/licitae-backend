@@ -32,7 +32,7 @@ def carregar_configs_org() -> list[dict]:
         if not configs:
             return [_config_padrao()]
 
-        return [_normalizar_config(c) for c in configs]
+        return [normalizar_config(c) for c in configs]
     except Exception as e:
         log.error("Erro ao carregar org_configs: %s", e)
         return [_config_padrao()]
@@ -111,7 +111,7 @@ def _config_padrao() -> dict:
     }
 
 
-def _normalizar_config(c: dict) -> dict:
+def normalizar_config(c: dict) -> dict:
     """Garante que todos os campos existem."""
     padrao = _config_padrao()
     return {

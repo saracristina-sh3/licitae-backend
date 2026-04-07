@@ -317,3 +317,30 @@ def buscar_novas_licitacoes(desde: str) -> list[dict]:
         .execute()
     )
     return result.data or []
+
+
+def buscar_orgs_reprospectar() -> list[dict]:
+    """Busca org_configs com reprospectar_pendente = true."""
+    client = get_client()
+    result = (
+        client.table("org_config")
+        .select("*")
+        .eq("reprospectar_pendente", True)
+        .execute()
+    )
+    return result.data or []
+
+
+def limpar_flag_reprospectar(org_id: str) -> None:
+    """Remove flag de reprospecção pendente após processar."""
+    client = get_client()
+    client.table("org_config").update({
+        "reprospectar_pendente": False,
+    }).eq("org_id", org_id).execute()
+
+
+def limpar_oportunidades_org(org_id: str) -> int:
+    """Remove todas as oportunidades de uma org (para re-prospecção limpa)."""
+    client = get_client()
+    result = client.table("oportunidades_org").delete().eq("org_id", org_id).execute()
+    return len(result.data) if result.data else 0

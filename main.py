@@ -353,6 +353,38 @@ def _executar_com_log(nome: str, fn, *args, **kwargs):
         return None
 
 
+def executar_reprospectar_pendentes():
+    """Verifica orgs com config alterada e roda re-prospecção."""
+    if not _supabase_disponivel():
+        return
+    try:
+        from db import buscar_orgs_reprospectar, limpar_flag_reprospectar, limpar_oportunidades_org
+        from user_configs import normalizar_config
+        from prospection_engine.services.prospection import prospectar_para_org
+
+        pendentes = buscar_orgs_reprospectar()
+        if not pendentes:
+            return
+
+        log.info("Re-prospecção: %d org(s) com config alterada", len(pendentes))
+
+        for row in pendentes:
+            org_id = row["org_id"]
+            config = normalizar_config(row)
+            try:
+                limpar_oportunidades_org(org_id)
+                stats = prospectar_para_org(config, dias_retroativos=90)
+                limpar_flag_reprospectar(org_id)
+                log.info(
+                    "Re-prospecção org=%s: %d oportunidades (ALTA=%d, MEDIA=%d, BAIXA=%d)",
+                    org_id, stats["total"], stats["alta"], stats["media"], stats["baixa"],
+                )
+            except Exception as e:
+                log.error("Erro re-prospecção org=%s: %s", org_id, e, exc_info=True)
+    except Exception as e:
+        log.error("Erro ao verificar re-prospecção: %s", e)
+
+
 def executar_pipeline_diario():
     """Pipeline sequencial com dependências corretas."""
     log.info("=" * 60)
@@ -416,6 +448,7 @@ def agendar():
     log.info("  12:00 — Pipeline diário (busca → editais → itens → resultados → comparativo → preços)")
     log.info("  4h    — Monitoramento de mudanças")
     log.info("  30min — Envio de convites")
+    log.info("  5min  — Re-prospecção (configs alteradas)")
     log.info("  Dom 06:00 — Syncs semanais (municípios, plataformas)")
     log.info("  Dom 07:00 — Coleta de plataformas-alvo")
     log.info("=" * 60)
@@ -427,6 +460,7 @@ def agendar():
     # Recorrente
     schedule.every(4).hours.do(executar_monitoramento)
     schedule.every(30).minutes.do(executar_envio_convites)
+    schedule.every(5).minutes.do(executar_reprospectar_pendentes)
 
     # Semanal (domingo)
     schedule.every().sunday.at("06:00").do(executar_syncs_semanais)

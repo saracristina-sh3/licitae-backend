@@ -284,6 +284,11 @@ def prospectar_para_org(org_config: dict, dias_retroativos: int = 7) -> dict:
         run_id, org_id, len(oportunidades), alta, media, baixa, duracao,
     )
 
+    # 4. Notificar novas oportunidades de alta relevância
+    if alta > 0 and org_id:
+        oportunidades_alta = [o for o in oportunidades if o["relevancia"] == "ALTA"]
+        _notificar_novas_oportunidades(org_id, oportunidades_alta, licitacoes)
+
     return {
         "org_id": org_id,
         "total": len(oportunidades),
@@ -291,6 +296,146 @@ def prospectar_para_org(org_config: dict, dias_retroativos: int = 7) -> dict:
         "media": media,
         "baixa": baixa,
     }
+
+
+def _notificar_novas_oportunidades(org_id: str, oportunidades: list[dict], licitacoes: list[dict]):
+    """Notifica membros da org sobre novas oportunidades de alta relevância."""
+    try:
+        from db import get_client
+        client = get_client()
+
+        # Busca membros da org com suas configs
+        membros = client.table("org_membros").select(
+            "user_id"
+        ).eq("org_id", org_id).execute()
+
+        if not membros.data:
+            return
+
+        # Mapa de licitações por ID
+        lic_map = {str(l["id"]): l for l in licitacoes}
+
+        for membro in membros.data:
+            user_id = membro["user_id"]
+
+            try:
+                uc = client.table("user_config").select(
+                    "alertas_email, alertas_telegram, telegram_chat_id"
+                ).eq("user_id", user_id).single().execute()
+            except Exception:
+                continue
+
+            if not uc.data:
+                continue
+
+            config_user = uc.data
+
+            # Montar lista de oportunidades
+            items_texto = []
+            for op in oportunidades[:10]:
+                lic = lic_map.get(str(op["licitacao_id"]), {})
+                mun = f"{lic.get('municipio_nome', '?')}/{lic.get('uf', '?')}"
+                objeto = (lic.get("objeto") or "")[:80]
+                score = op.get("score", 0)
+                items_texto.append({"municipio": mun, "objeto": objeto, "score": score})
+
+            # Email
+            if config_user.get("alertas_email"):
+                _enviar_email_novas_oportunidades(client, user_id, items_texto)
+
+            # Telegram
+            if config_user.get("alertas_telegram") and config_user.get("telegram_chat_id"):
+                _enviar_telegram_novas_oportunidades(
+                    config_user["telegram_chat_id"], items_texto
+                )
+
+    except Exception as exc:
+        log.warning("Erro ao notificar novas oportunidades: %s", exc)
+
+
+def _enviar_email_novas_oportunidades(client, user_id: str, items: list[dict]):
+    """Envia email com novas oportunidades de alta relevância."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from config import Config
+
+    if not Config.SMTP_USER:
+        return
+
+    try:
+        profile = client.table("profiles").select("email").eq("user_id", user_id).single().execute()
+        email = profile.data.get("email") if profile.data else None
+        if not email:
+            return
+    except Exception:
+        return
+
+    linhas = ""
+    for item in items:
+        linhas += f"""
+        <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">{item['municipio']}</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">{item['objeto']}</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: 600; color: #e53e3e;">{item['score']:.0f}</td>
+        </tr>"""
+
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; color: #2d3748;">
+        <h2 style="color: #e53e3e;">Novas oportunidades de alta relevancia — Licitae</h2>
+        <p><strong>{len(items)}</strong> nova(s) licitacao(oes) com alta relevancia para sua organizacao:</p>
+        <table style="border-collapse: collapse; width: 100%; font-size: 14px;">
+            <tr style="background: #2d3748; color: white;">
+                <th style="padding: 8px;">Municipio</th>
+                <th style="padding: 8px;">Objeto</th>
+                <th style="padding: 8px;">Score</th>
+            </tr>
+            {linhas}
+        </table>
+        <p style="margin-top: 16px;">Abra o <strong>Licitae</strong> para ver os detalhes.</p>
+        <hr>
+        <p style="color: #718096; font-size: 12px;">Alerta automatico — Licitae</p>
+    </body>
+    </html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = Config.SMTP_USER
+    msg["To"] = email
+    msg["Subject"] = f"Licitae — {len(items)} nova(s) oportunidade(s) de alta relevancia"
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
+            server.starttls()
+            server.login(Config.SMTP_USER, Config.SMTP_PASS)
+            server.sendmail(Config.SMTP_USER, email, msg.as_string())
+        log.info("Email de novas oportunidades enviado para %s (%d)", email, len(items))
+    except Exception as e:
+        log.error("Erro ao enviar email de oportunidades para %s: %s", email, e)
+
+
+def _enviar_telegram_novas_oportunidades(chat_id: str, items: list[dict]):
+    """Envia novas oportunidades via Telegram."""
+    from config import Config
+    if not Config.TELEGRAM_BOT_TOKEN:
+        return
+
+    from telegram_client import enviar_mensagem
+
+    linhas = []
+    for item in items:
+        linhas.append(
+            f"<b>{item['municipio']}</b> (score {item['score']:.0f})\n"
+            f"  {item['objeto']}"
+        )
+
+    texto = (
+        f"<b>Licitae — {len(items)} nova(s) oportunidade(s) ALTA</b>\n\n"
+        + "\n\n".join(linhas)
+    )
+
+    enviar_mensagem(chat_id, texto)
 
 
 def prospectar_todas_orgs(dias_retroativos: int = 7) -> list[dict]:
