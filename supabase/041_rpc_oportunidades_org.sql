@@ -17,7 +17,7 @@ CREATE OR REPLACE FUNCTION buscar_oportunidades_org_filtradas(
     p_offset INT DEFAULT 0
 )
 RETURNS JSON
-LANGUAGE plpgsql SECURITY DEFINER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
     v_org_id UUID;
@@ -28,13 +28,13 @@ BEGIN
     SELECT p.org_id INTO v_org_id
     FROM profiles p WHERE p.id = auth.uid();
 
-    IF v_org_id IS NULL THEN
-        RETURN json_build_object('data', '[]'::json, 'count', 0);
+    IF v_org_id IS NOT NULL THEN
+        SELECT EXISTS(
+            SELECT 1 FROM oportunidades_org WHERE org_id = v_org_id LIMIT 1
+        ) INTO v_has_oportunidades;
+    ELSE
+        v_has_oportunidades := FALSE;
     END IF;
-
-    SELECT EXISTS(
-        SELECT 1 FROM oportunidades_org WHERE org_id = v_org_id LIMIT 1
-    ) INTO v_has_oportunidades;
 
     -- ══════ CAMINHO A: com oportunidades prospectadas ══════
     IF v_has_oportunidades THEN
