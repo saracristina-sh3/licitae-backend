@@ -102,7 +102,7 @@ def _config_padrao() -> dict:
         "fpm_maximo": Config.POPULACAO_MAXIMA,
         "palavras_chave": Config.PALAVRAS_CHAVE,
         "modalidades": Config.MODALIDADES,
-        "fontes": ["PNCP", "QUERIDO_DIARIO", "TCE_RJ"],
+        "fontes": ["PNCP", "QUERIDO_DIARIO", "TCE_RJ", "PORTAL_MUNICIPAL"],
         "termos_alta": TERMOS_ALTA,
         "termos_media": TERMOS_MEDIA,
         "termos_exclusao": [],

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"CREATE TABLE.*licitacao\" /Users/sara/dev/licitae/Licitae-backend/supabase/*.sql)",
+      "Bash(xargs cat:*)",
+      "Bash(grep -n \"url\\\\|domain\\\\|portal\\\\|site\" /Users/sara/dev/licitae/Licitae-backend/supabase/*.sql)",
+      "Bash(curl -s \"https://servicodados.ibge.gov.br/api/v1/localidades/microrregioes/3111/municipios\")",
+      "Bash(iconv -f UTF-8 -t UTF-8 -c)"
+    ]
+  }
+}

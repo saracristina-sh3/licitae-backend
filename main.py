@@ -155,6 +155,24 @@ def executar_coleta(
         except Exception as e:
             log.error("TCE-RJ: erro - %s", e)
 
+    # Coleta Portais Municipais
+    if "PORTAL_MUNICIPAL" in coleta_config["fontes"]:
+        if data_de and data_ate:
+            dt_inicio, dt_fim = data_de, data_ate
+        else:
+            d = dias or Config.DIAS_RETROATIVOS
+            hoje = datetime.now()
+            inicio = hoje - timedelta(days=d)
+            dt_inicio = inicio.strftime("%Y%m%d")
+            dt_fim = hoje.strftime("%Y%m%d")
+        try:
+            from scrapers.portais_municipais import buscar_portais_municipais
+            pm = buscar_portais_municipais(dt_inicio, dt_fim)
+            resultados.extend(pm)
+            log.info("Portais Municipais: %d resultados", len(pm))
+        except Exception as e:
+            log.error("Portais Municipais: erro - %s", e)
+
     log.info("Total coletado: %d (todas as fontes)", len(resultados))
 
     if dry_run:
