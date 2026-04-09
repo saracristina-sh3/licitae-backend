@@ -21,6 +21,10 @@ from scrapers.portais.base import PortalScraper
 
 log = logging.getLogger(__name__)
 
+# Regex para detectar CMS "cadastro genérico" (obterPagina / paginarCadastroGenerico)
+REGEX_CADGEN_ID = re.compile(r"paginarCadastroGenerico\(\s*(\d+)")
+REGEX_PAGINA_ID = re.compile(r"/pagina/(\d+)")
+
 # Caminhos comuns para páginas de licitação em sites de prefeituras
 CAMINHOS_LICITACAO = [
     "/licitacoes",
@@ -133,9 +137,15 @@ class PrefeituraGenericaScraper(PortalScraper):
         self, url_listagem: str, data_ini: str, data_fim: str,
     ) -> list[dict]:
         """Coleta publicações de uma página de listagem de licitações."""
+        # Tentar CMS cadgen via AJAX primeiro
+        cadgen = self._coletar_cadgen(url_listagem, data_ini, data_fim)
+        if cadgen is not None:
+            return cadgen
+
+        # Fallback: extração HTML estática
         resultados: list[dict] = []
         pagina = 1
-        max_paginas = 5  # limite de segurança
+        max_paginas = 5
 
         while pagina <= max_paginas:
             url = self._url_paginada(url_listagem, pagina)
@@ -154,7 +164,6 @@ class PrefeituraGenericaScraper(PortalScraper):
                     resultados.append(item)
                     novos += 1
 
-            # Se nenhum item novo nesta página, parar
             if novos == 0:
                 break
 
@@ -162,6 +171,128 @@ class PrefeituraGenericaScraper(PortalScraper):
             self._politeness_delay()
 
         return resultados
+
+    def _coletar_cadgen(
+        self, url_listagem: str, data_ini: str, data_fim: str,
+    ) -> list[dict] | None:
+        """
+        Coleta via CMS 'cadastro genérico' (usado por muitos municípios de MG).
+        O conteúdo é carregado via AJAX POST para /ws_consulta/Conteudo_Generico.php.
+        Retorna None se a página não usa esse CMS.
+        """
+        # Buscar página inicial para detectar o CMS e extrair IDs
+        soup = self._get_soup(url_listagem)
+        if not soup:
+            return None
+
+        # Verificar se já tem conteúdo cadgen renderizado (HTML estático)
+        containers = soup.find_all("div", id="contenedor_registro_generico")
+        if containers:
+            return None  # Deixar o fluxo normal extrair
+
+        # Detectar obterPagina() — indica CMS com AJAX
+        page_text = str(soup)
+        if "obterPagina" not in page_text and "paginarCadastroGenerico" not in page_text:
+            return None
+
+        # Extrair INT_RPID (ID da página) da URL
+        match_pagina = REGEX_PAGINA_ID.search(url_listagem)
+        if not match_pagina:
+            return None
+
+        pagina_id = match_pagina.group(1)
+        base = url_listagem.split("/pagina/")[0]
+        ws_url = f"{base}/ws_consulta/Conteudo_Generico.php"
+
+        log.info("  %s: CMS cadgen detectado (pagina=%s), buscando via AJAX",
+                 self.municipio["nome"], pagina_id)
+
+        # Configurar cookie INT_RPID (o CMS precisa dele)
+        self.session.cookies.set("INT_RPID", pagina_id, domain=base.split("//")[-1])
+
+        # Primeira request para descobrir INT_CAD_GEN
+        import time as _time
+        timestamp = str(int(_time.time() * 1000))
+
+        resp_html = self._post_cadgen(ws_url, timestamp, pagina_id)
+        if not resp_html:
+            return None
+
+        soup_ajax = BeautifulSoup(resp_html, "html.parser")
+
+        # Extrair INT_CAD_GEN do paginador
+        cadgen_id = None
+        match_id = REGEX_CADGEN_ID.search(resp_html)
+        if match_id:
+            cadgen_id = match_id.group(1)
+
+        # Extrair itens da primeira página
+        resultados: list[dict] = []
+        itens = self._extrair_de_cadgen(soup_ajax, url_listagem)
+
+        for item in itens:
+            data_pub = item.get("data_publicacao", "")[:10]
+            if data_pub and data_ini <= data_pub <= data_fim:
+                resultados.append(item)
+
+        # Paginação (máx 5 páginas adicionais)
+        if cadgen_id:
+            # Extrair tabela do sort
+            sort_match = re.search(r'(site_temporario\.TMP_SORT_CADGEN_\w+)', resp_html)
+            sort_key = sort_match.group(1) if sort_match else ""
+
+            for pag in range(1, 5):
+                self._politeness_delay()
+                resp_pag = self._post_cadgen(ws_url, timestamp, pagina_id, cadgen_id, pag, sort_key)
+                if not resp_pag:
+                    break
+
+                soup_pag = BeautifulSoup(resp_pag, "html.parser")
+                itens_pag = self._extrair_de_cadgen(soup_pag, url_listagem)
+                if not itens_pag:
+                    break
+
+                novos = 0
+                for item in itens_pag:
+                    data_pub = item.get("data_publicacao", "")[:10]
+                    if data_pub and data_ini <= data_pub <= data_fim:
+                        resultados.append(item)
+                        novos += 1
+
+                if novos == 0:
+                    break
+
+        return resultados
+
+    def _post_cadgen(
+        self,
+        ws_url: str,
+        timestamp: str,
+        pagina_id: str,
+        cadgen_id: str | None = None,
+        pag: int | None = None,
+        sort_key: str = "",
+    ) -> str | None:
+        """Faz POST ao endpoint do CMS cadastro genérico."""
+        try:
+            data = {
+                "INT_CAD_GEN": cadgen_id or "",
+                "STR_BSC_CAD_GEN": "",
+                "LG_ADM": "",
+            }
+            if pag is not None:
+                data["INT_PAG"] = str(pag)
+
+            resp = self.session.post(
+                f"{ws_url}?DataHora={timestamp}",
+                data=data,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:
+            log.warning("Erro ao buscar cadgen %s: %s", ws_url, e)
+            return None
 
     def _url_paginada(self, url_base: str, pagina: int) -> str:
         """Adiciona parâmetro de paginação à URL."""
@@ -173,8 +304,12 @@ class PrefeituraGenericaScraper(PortalScraper):
     def _extrair_itens(self, soup: BeautifulSoup, url_pagina: str) -> list[dict]:
         """
         Extrai itens de licitação do HTML parseado.
-        Tenta múltiplas estratégias: tabelas, cards/divs, listas.
+        Tenta múltiplas estratégias: cadastro genérico, tabelas, cards/divs.
         """
+        itens = self._extrair_de_cadgen(soup, url_pagina)
+        if itens:
+            return itens
+
         itens = self._extrair_de_tabela(soup, url_pagina)
         if itens:
             return itens
@@ -184,6 +319,70 @@ class PrefeituraGenericaScraper(PortalScraper):
             return itens
 
         return []
+
+    def _extrair_de_cadgen(self, soup: BeautifulSoup, url_pagina: str) -> list[dict]:
+        """
+        Extrai licitações do layout 'cadastro genérico' (cadgen) usado por
+        muitos municípios de MG. Estrutura: DIV#contenedor_registro_generico
+        com spans .titulo_generico / .valor_generico.
+        """
+        containers = soup.find_all("div", id="contenedor_registro_generico")
+        if not containers:
+            return []
+
+        resultados = []
+        for container in containers:
+            campos: dict[str, str] = {}
+            for info in container.find_all("div", class_="informacao_generica"):
+                titulo_el = info.find("span", class_="titulo_generico")
+                valor_el = info.find("span", class_="valor_generico")
+                if titulo_el and valor_el:
+                    chave = titulo_el.get_text(strip=True).lower()
+                    valor = valor_el.get_text(" ", strip=True)
+                    campos[chave] = valor
+
+            objeto = campos.get("objeto", "").strip()
+            if not objeto:
+                continue
+
+            processo = campos.get("nº processo", "") or campos.get("nº proc", "")
+            processo = processo.strip()
+
+            modalidade_raw = campos.get("modalidade", "").strip()
+            modalidade = self._detectar_modalidade(modalidade_raw) or modalidade_raw
+
+            data_julg = campos.get("data de julgamento", "").strip()
+            data_pub = self._parse_data(data_julg) if data_julg else ""
+
+            situacao = campos.get("situação", "").strip() or "Publicada"
+
+            # Extrair data dos anexos como fallback para data_publicacao
+            data_anexo = ""
+            for arq in container.find_all("span", id="datahora_arquivo_registro_generico"):
+                txt = arq.get_text(strip=True)
+                parsed = self._parse_data(txt)
+                if parsed and (not data_anexo or parsed > data_anexo):
+                    data_anexo = parsed
+
+            # Usar data de julgamento se disponível, senão data do último anexo
+            data_final = data_pub or data_anexo
+
+            resultados.append({
+                "objeto": objeto[:500],
+                "modalidade": modalidade,
+                "data_publicacao": f"{data_final}T00:00:00" if data_final else "",
+                "data_abertura": f"{data_pub}T00:00:00" if data_pub else "",
+                "data_encerramento": "",
+                "valor_estimado": 0,
+                "numero_processo": processo,
+                "orgao": self.municipio["nome"],
+                "cnpj": "",
+                "situacao": situacao,
+                "url_fonte": url_pagina,
+                "exclusivo_me_epp": False,
+            })
+
+        return resultados
 
     def _extrair_de_tabela(self, soup: BeautifulSoup, url_pagina: str) -> list[dict]:
         """Extrai licitações de tabelas HTML."""
