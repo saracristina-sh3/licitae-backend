@@ -177,112 +177,96 @@ class PrefeituraGenericaScraper(PortalScraper):
     ) -> list[dict] | None:
         """
         Coleta via CMS 'cadastro genérico' (usado por muitos municípios de MG).
-        O conteúdo é carregado via AJAX POST para /ws_consulta/Conteudo_Generico.php.
+        Fluxo:
+          1. GET /ws_consulta/Pagina.php?INT_PAG={id} → descobre INT_CAD_GEN
+          2. POST /ws_consulta/Conteudo_Generico.php com INT_CAD_GEN → HTML
         Retorna None se a página não usa esse CMS.
         """
-        # Buscar página inicial para detectar o CMS e extrair IDs
-        soup = self._get_soup(url_listagem)
-        if not soup:
-            return None
-
-        # Verificar se já tem conteúdo cadgen renderizado (HTML estático)
-        containers = soup.find_all("div", id="contenedor_registro_generico")
-        if containers:
-            return None  # Deixar o fluxo normal extrair
-
-        # Detectar obterPagina() — indica CMS com AJAX
-        page_text = str(soup)
-        if "obterPagina" not in page_text and "paginarCadastroGenerico" not in page_text:
-            return None
-
-        # Extrair INT_RPID (ID da página) da URL
+        # Extrair ID da página da URL (/pagina/{id}/...)
         match_pagina = REGEX_PAGINA_ID.search(url_listagem)
         if not match_pagina:
             return None
 
         pagina_id = match_pagina.group(1)
         base = url_listagem.split("/pagina/")[0]
-        ws_url = f"{base}/ws_consulta/Conteudo_Generico.php"
 
-        log.info("  %s: CMS cadgen detectado (pagina=%s), buscando via AJAX",
-                 self.municipio["nome"], pagina_id)
-
-        # Configurar cookie INT_RPID (o CMS precisa dele)
-        self.session.cookies.set("INT_RPID", pagina_id, domain=base.split("//")[-1])
-
-        # Primeira request para descobrir INT_CAD_GEN
-        import time as _time
-        timestamp = str(int(_time.time() * 1000))
-
-        resp_html = self._post_cadgen(ws_url, timestamp, pagina_id)
-        if not resp_html:
+        # Passo 1: Descobrir INT_CAD_GEN via Pagina.php
+        cadgen_id = self._descobrir_cadgen_id(base, pagina_id)
+        if not cadgen_id:
             return None
 
-        soup_ajax = BeautifulSoup(resp_html, "html.parser")
+        log.info("  %s: CMS cadgen detectado (pagina=%s, cadgen=%s)",
+                 self.municipio["nome"], pagina_id, cadgen_id)
 
-        # Extrair INT_CAD_GEN do paginador
-        cadgen_id = None
-        match_id = REGEX_CADGEN_ID.search(resp_html)
-        if match_id:
-            cadgen_id = match_id.group(1)
+        # Configurar cookie INT_RPID
+        domain = base.split("//")[-1].split("/")[0]
+        self.session.cookies.set("INT_RPID", pagina_id, domain=domain)
 
-        # Extrair itens da primeira página
+        # Passo 2: Buscar conteúdo via POST
+        import time as _time
+        timestamp = str(int(_time.time() * 1000))
+        ws_url = f"{base}/ws_consulta/Conteudo_Generico.php"
+
         resultados: list[dict] = []
-        itens = self._extrair_de_cadgen(soup_ajax, url_listagem)
 
-        for item in itens:
-            data_pub = item.get("data_publicacao", "")[:10]
-            if data_pub and data_ini <= data_pub <= data_fim:
-                resultados.append(item)
-
-        # Paginação (máx 5 páginas adicionais)
-        if cadgen_id:
-            # Extrair tabela do sort
-            sort_match = re.search(r'(site_temporario\.TMP_SORT_CADGEN_\w+)', resp_html)
-            sort_key = sort_match.group(1) if sort_match else ""
-
-            for pag in range(1, 5):
+        for pag in range(0, 5):
+            if pag > 0:
                 self._politeness_delay()
-                resp_pag = self._post_cadgen(ws_url, timestamp, pagina_id, cadgen_id, pag, sort_key)
-                if not resp_pag:
-                    break
 
-                soup_pag = BeautifulSoup(resp_pag, "html.parser")
-                itens_pag = self._extrair_de_cadgen(soup_pag, url_listagem)
-                if not itens_pag:
-                    break
+            resp_html = self._post_cadgen(ws_url, timestamp, cadgen_id, pag)
+            if not resp_html:
+                break
 
-                novos = 0
-                for item in itens_pag:
-                    data_pub = item.get("data_publicacao", "")[:10]
-                    if data_pub and data_ini <= data_pub <= data_fim:
-                        resultados.append(item)
-                        novos += 1
+            soup_ajax = BeautifulSoup(resp_html, "html.parser")
+            itens = self._extrair_de_cadgen(soup_ajax, url_listagem)
+            if not itens:
+                break
 
-                if novos == 0:
-                    break
+            novos = 0
+            for item in itens:
+                data_pub = item.get("data_publicacao", "")[:10]
+                if data_pub and data_ini <= data_pub <= data_fim:
+                    resultados.append(item)
+                    novos += 1
+
+            if novos == 0:
+                break
 
         return resultados
+
+    def _descobrir_cadgen_id(self, base_url: str, pagina_id: str) -> str | None:
+        """
+        Descobre o INT_CAD_GEN fazendo GET /ws_consulta/Pagina.php?INT_PAG={id}.
+        A resposta contém: obterCadastroGenerico({cadgen_id}, false)
+        """
+        try:
+            url = f"{base_url}/ws_consulta/Pagina.php?INT_PAG={pagina_id}"
+            resp = self.session.get(url, timeout=15)
+            resp.raise_for_status()
+            # Buscar obterCadastroGenerico(499, false) ou buscarConteudoGenerico(499)
+            match = re.search(r"(?:obterCadastroGenerico|buscarConteudoGenerico)\(\s*(\d+)", resp.text)
+            if match:
+                return match.group(1)
+            return None
+        except Exception as e:
+            log.debug("  Falha ao descobrir cadgen_id: %s", e)
+            return None
 
     def _post_cadgen(
         self,
         ws_url: str,
         timestamp: str,
-        pagina_id: str,
-        cadgen_id: str | None = None,
-        pag: int | None = None,
-        sort_key: str = "",
+        cadgen_id: str,
+        pag: int = 0,
     ) -> str | None:
         """Faz POST ao endpoint do CMS cadastro genérico."""
         try:
             data = {
-                "INT_CAD_GEN": cadgen_id or "",
+                "INT_CAD_GEN": cadgen_id,
                 "STR_BSC_CAD_GEN": "",
                 "LG_ADM": "",
+                "INT_PAG": str(pag) if pag > 0 else "undefined",
             }
-            if pag is not None:
-                data["INT_PAG"] = str(pag)
-
             resp = self.session.post(
                 f"{ws_url}?DataHora={timestamp}",
                 data=data,
