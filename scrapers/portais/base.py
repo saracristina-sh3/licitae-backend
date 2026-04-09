@@ -14,9 +14,21 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "Licitae/1.0 (coleta de licitacoes publicas; +https://licitae.com.br)"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
 REQUEST_TIMEOUT = 30
 POLITENESS_DELAY = 1.5
+
+# Headers padrão de navegador para evitar bloqueio por WAF/CDN
+_BROWSER_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+}
 
 
 class PortalScraper(ABC):
@@ -33,7 +45,7 @@ class PortalScraper(ABC):
         self.municipio = municipio
         self.urls_licitacoes = urls_licitacoes or []
         self.session = session or requests.Session()
-        self.session.headers.update({"User-Agent": USER_AGENT})
+        self.session.headers.update(_BROWSER_HEADERS)
 
     @abstractmethod
     def buscar(self, data_inicial: str, data_final: str) -> list[dict]:
