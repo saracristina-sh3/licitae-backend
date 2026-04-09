@@ -95,8 +95,9 @@ def buscar_portais_municipais(
         try:
             scraper = _instanciar_scraper(
                 portal_config.scraper_type,
-                portal_config.url_licitacoes or portal_config.url_base,
+                portal_config.url_base,
                 mun,
+                portal_config.urls_licitacoes,
             )
             if not scraper:
                 stats["erro"] += 1
@@ -135,6 +136,7 @@ def _instanciar_scraper(
     scraper_type: str,
     url_base: str,
     municipio: dict,
+    urls_licitacoes: list[str] | None = None,
 ) -> PortalScraper | None:
     """Instancia o scraper correto via strategy pattern."""
     class_path = SCRAPER_TYPES.get(scraper_type)
@@ -146,7 +148,11 @@ def _instanciar_scraper(
         module_path, class_name = class_path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         scraper_class = getattr(module, class_name)
-        return scraper_class(url_base=url_base, municipio=municipio)
+        return scraper_class(
+            url_base=url_base,
+            municipio=municipio,
+            urls_licitacoes=urls_licitacoes,
+        )
     except Exception as e:
         log.error("Erro ao instanciar scraper %s: %s", scraper_type, e)
         return None

@@ -43,7 +43,7 @@ class TestPortalRegistry:
         config = get_portal_config("3162500")  # São João Del Rei
         assert config is not None
         assert config.scraper_type == "prefeitura_generica"
-        assert "saojaodelrei" in config.url_base
+        assert "saojoaodelrei" in config.url_base
 
     def test_get_portal_config_inexistente(self):
         config = get_portal_config("9999999")

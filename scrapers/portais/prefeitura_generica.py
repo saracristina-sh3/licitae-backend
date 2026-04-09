@@ -80,7 +80,16 @@ class PrefeituraGenericaScraper(PortalScraper):
         data_ini = self._formatar_data(data_inicial)
         data_fim = self._formatar_data(data_final)
 
-        # 1) Encontrar página de licitações
+        # Se há URLs explícitas, usar diretamente (sem descoberta)
+        if self.urls_licitacoes:
+            publicacoes: list[dict] = []
+            for url in self.urls_licitacoes:
+                log.info("  %s: coletando URL direta → %s", self.municipio["nome"], url)
+                publicacoes.extend(self._coletar_listagem(url, data_ini, data_fim))
+            log.info("  %s: %d publicações encontradas", self.municipio["nome"], len(publicacoes))
+            return publicacoes
+
+        # Descoberta automática
         url_licitacoes = self._encontrar_pagina_licitacoes()
         if not url_licitacoes:
             log.info("  %s: página de licitações não encontrada", self.municipio["nome"])
@@ -88,7 +97,6 @@ class PrefeituraGenericaScraper(PortalScraper):
 
         log.info("  %s: página encontrada → %s", self.municipio["nome"], url_licitacoes)
 
-        # 2) Coletar publicações da listagem
         publicacoes = self._coletar_listagem(url_licitacoes, data_ini, data_fim)
         log.info("  %s: %d publicações encontradas", self.municipio["nome"], len(publicacoes))
 

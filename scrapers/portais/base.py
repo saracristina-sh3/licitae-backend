@@ -27,9 +27,11 @@ class PortalScraper(ABC):
         url_base: str,
         municipio: dict,
         session: requests.Session | None = None,
+        urls_licitacoes: list[str] | None = None,
     ):
         self.url_base = url_base.rstrip("/")
         self.municipio = municipio
+        self.urls_licitacoes = urls_licitacoes or []
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
 
