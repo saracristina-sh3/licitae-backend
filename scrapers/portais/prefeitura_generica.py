@@ -182,13 +182,20 @@ class PrefeituraGenericaScraper(PortalScraper):
           2. POST /ws_consulta/Conteudo_Generico.php com INT_CAD_GEN → HTML
         Retorna None se a página não usa esse CMS.
         """
-        # Extrair ID da página da URL (/pagina/{id}/...)
         match_pagina = REGEX_PAGINA_ID.search(url_listagem)
         if not match_pagina:
             return None
 
         pagina_id = match_pagina.group(1)
         base = url_listagem.split("/pagina/")[0]
+
+        # Configurar Referer e cookie ANTES das requests
+        domain = base.split("//")[-1].split("/")[0]
+        self.session.headers.update({
+            "Referer": url_listagem,
+            "Origin": base,
+        })
+        self.session.cookies.set("INT_RPID", pagina_id, domain=domain)
 
         # Passo 1: Descobrir INT_CAD_GEN via Pagina.php
         cadgen_id = self._descobrir_cadgen_id(base, pagina_id)
@@ -197,10 +204,6 @@ class PrefeituraGenericaScraper(PortalScraper):
 
         log.info("  %s: CMS cadgen detectado (pagina=%s, cadgen=%s)",
                  self.municipio["nome"], pagina_id, cadgen_id)
-
-        # Configurar cookie INT_RPID
-        domain = base.split("//")[-1].split("/")[0]
-        self.session.cookies.set("INT_RPID", pagina_id, domain=domain)
 
         # Passo 2: Buscar conteúdo via POST
         import time as _time
@@ -243,13 +246,14 @@ class PrefeituraGenericaScraper(PortalScraper):
             url = f"{base_url}/ws_consulta/Pagina.php?INT_PAG={pagina_id}"
             resp = self.session.get(url, timeout=15)
             resp.raise_for_status()
-            # Buscar obterCadastroGenerico(499, false) ou buscarConteudoGenerico(499)
             match = re.search(r"(?:obterCadastroGenerico|buscarConteudoGenerico)\(\s*(\d+)", resp.text)
             if match:
                 return match.group(1)
+            log.info("  %s: Pagina.php respondeu mas sem cadgen_id (len=%d)",
+                     self.municipio["nome"], len(resp.text))
             return None
         except Exception as e:
-            log.debug("  Falha ao descobrir cadgen_id: %s", e)
+            log.warning("  %s: Falha ao acessar Pagina.php: %s", self.municipio["nome"], e)
             return None
 
     def _post_cadgen(
