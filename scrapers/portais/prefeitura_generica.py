@@ -190,12 +190,11 @@ class PrefeituraGenericaScraper(PortalScraper):
         base = url_listagem.split("/pagina/")[0]
 
         # Configurar Referer e cookie ANTES das requests
-        domain = base.split("//")[-1].split("/")[0]
         self.session.headers.update({
             "Referer": url_listagem,
             "Origin": base,
         })
-        self.session.cookies.set("INT_RPID", pagina_id, domain=domain)
+        self.session.cookies.set("INT_RPID", pagina_id)
 
         # Passo 1: Descobrir INT_CAD_GEN via Pagina.php
         cadgen_id = self._descobrir_cadgen_id(base, pagina_id)
