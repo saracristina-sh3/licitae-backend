@@ -58,14 +58,15 @@ def buscar_portais_municipais(
         if m.get("microrregiao_id") in microrregioes_ids
     ]
 
-    # Incluir também municípios que estão no registry mas não passaram
-    # pelo filtro de população ou microrregião
+    # Incluir também municípios que estão no registry mas não passaram pelo filtro de FPM
+    # (cidades maiores da região que têm portal cadastrado)
     codigos_alvo = {m["codigo_ibge"] for m in municipios_alvo}
     todos_mg = carregar_municipios(["MG"], 999999)
     for m in todos_mg:
         if (
             m["codigo_ibge"] in PORTAL_REGISTRY
             and m["codigo_ibge"] not in codigos_alvo
+            and m.get("microrregiao_id") in microrregioes_ids
         ):
             municipios_alvo.append(m)
             codigos_alvo.add(m["codigo_ibge"])

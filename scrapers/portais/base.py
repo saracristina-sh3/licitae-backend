@@ -1,9 +1,6 @@
 """
 Classe base para scrapers de portais institucionais municipais.
 Cada CMS/plataforma implementa uma subclasse com lógica de parsing específica.
-
-Usa curl_cffi para emular TLS fingerprint de browser real e evitar
-bloqueio por Cloudflare/WAF.
 """
 
 from __future__ import annotations
@@ -12,13 +9,26 @@ import logging
 import time
 from abc import ABC, abstractmethod
 
-from curl_cffi.requests import Session
+import requests
 from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
 REQUEST_TIMEOUT = 30
 POLITENESS_DELAY = 1.5
+
+# Headers padrão de navegador para evitar bloqueio por WAF/CDN
+_BROWSER_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+}
 
 
 class PortalScraper(ABC):
@@ -28,13 +38,14 @@ class PortalScraper(ABC):
         self,
         url_base: str,
         municipio: dict,
-        session: Session | None = None,
+        session: requests.Session | None = None,
         urls_licitacoes: list[str] | None = None,
     ):
         self.url_base = url_base.rstrip("/")
         self.municipio = municipio
         self.urls_licitacoes = urls_licitacoes or []
-        self.session = session or Session(impersonate="chrome131")
+        self.session = session or requests.Session()
+        self.session.headers.update(_BROWSER_HEADERS)
 
     @abstractmethod
     def buscar(self, data_inicial: str, data_final: str) -> list[dict]:
